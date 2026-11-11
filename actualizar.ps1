@@ -262,9 +262,10 @@ Disable-ScheduledTask -TaskName $Tarea -EA SilentlyContinue | Out-Null
 $script:TareaDeshabilitada = $true
 Stop-ScheduledTask    -TaskName $Tarea -EA SilentlyContinue
 Listeners-Vivos | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-# TODO Etapa 2: cerrar tambien los Chromium cuyo --user-data-dir este bajo
-# perfiles\ de esta carpeta. Si quedan huerfanos, el perfil queda bloqueado
-# y el proximo arranque no puede abrirlo.
+# Y los navegadores que abrio: si quedan huerfanos, el perfil queda tomado y
+# el proximo arranque no puede abrirlo.
+Correr "powershell.exe" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                          (Join-Path $PSScriptRoot "cerrar_navegadores.ps1"))
 Start-Sleep -Seconds 2
 $vivo = Listeners-Vivos
 if ($vivo.Count -gt 0) { Morir "el listener sigue vivo (PID $($vivo[0].ProcessId)). No se toca el codigo con el bot corriendo." }

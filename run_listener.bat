@@ -50,6 +50,10 @@ if errorlevel 1 (
 )
 
 echo.
+echo === Cerrando navegadores huerfanos del bot ===
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0cerrar_navegadores.ps1"
+
+echo.
 echo === Arrancando el listener ===
 "%PY%" listener_futuros.py
 
@@ -81,6 +85,8 @@ if errorlevel 1 (
     echo Falta algo critico: no se arranca el listener.>> "%LOG%"
     exit /b 1
 )
+REM Un Chromium huerfano de un listener anterior tiene el perfil tomado.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0cerrar_navegadores.ps1" >> "%LOG%" 2>&1
 "%PY%" listener_futuros.py >> "%LOG%" 2>&1
 echo El listener termino con codigo %errorlevel%.>> "%LOG%"
 exit /b %errorlevel%

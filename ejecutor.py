@@ -151,47 +151,52 @@ class EjecutorBase:
     def colocar_lote(self, trabajos: list) -> list:
         """Coloca los trabajos en orden. Devuelve un ResultadoOrden por cada
         uno, incluidos los que no se intentaron (y por que)."""
-        resultados = []
         with operacion(f"lote de {len(trabajos)} orden(es)"):
-            bloqueadas = {}            # alias -> motivo
-            for i, trabajo in enumerate(trabajos, start=1):
-                etiqueta = etiqueta_de(i, trabajo)
-                alias = trabajo["cuenta"]
+            return self._recorrer_lote(trabajos)
 
-                if aborto_pedido():
-                    log.warning(f"ABORTO: no se coloca la orden #{i} ni las siguientes.")
-                    resultados.extend(self._omitidas(trabajos, i, "abortado con stop"))
-                    break
+    def _recorrer_lote(self, trabajos: list) -> list:
+        """La politica del lote, SIN tomar el candado (lo toma quien llama).
+        El ejecutor web la corre en su hilo del navegador."""
+        resultados = []
+        bloqueadas = {}            # alias -> motivo
+        for i, trabajo in enumerate(trabajos, start=1):
+            etiqueta = etiqueta_de(i, trabajo)
+            alias = trabajo["cuenta"]
 
-                if alias in bloqueadas:
-                    log.warning(f"Orden #{i} NO se intenta: la cuenta {alias} quedo "
-                                f"bloqueada en este lote ({bloqueadas[alias]}).")
-                    resultados.append(ResultadoOrden(
-                        etiqueta, alias, omitida=True,
-                        detalle=f"cuenta bloqueada en este lote: {bloqueadas[alias]}"))
-                    continue
+            if aborto_pedido():
+                log.warning(f"ABORTO: no se coloca la orden #{i} ni las siguientes.")
+                resultados.extend(self._omitidas(trabajos, i, "abortado con stop"))
+                break
 
-                t0 = time.monotonic()
-                try:
-                    resultado = self._colocar_una(trabajo, etiqueta)
-                except OperacionAbortada as e:
-                    log.warning(f"ABORTO antes del clic final: la orden #{i} NO se coloco.")
-                    resultados.append(ResultadoOrden(
-                        etiqueta, alias, omitida=True, detalle=str(e),
-                        elapsed=time.monotonic() - t0))
-                    resultados.extend(self._omitidas(trabajos, i + 1, "abortado con stop"))
-                    break
-                except Exception as e:
-                    log.exception(f"Fallo colocando la orden #{i} ({etiqueta})")
-                    resultado = ResultadoOrden(etiqueta, alias, error=str(e) or type(e).__name__)
-                resultado.elapsed = resultado.elapsed or (time.monotonic() - t0)
+            if alias in bloqueadas:
+                log.warning(f"Orden #{i} NO se intenta: la cuenta {alias} quedo "
+                            f"bloqueada en este lote ({bloqueadas[alias]}).")
+                resultados.append(ResultadoOrden(
+                    etiqueta, alias, omitida=True,
+                    detalle=f"cuenta bloqueada en este lote: {bloqueadas[alias]}"))
+                continue
 
-                if resultado.bloquea_la_cuenta:
-                    motivo = (f"la orden #{i} " +
-                              ("fallo" if resultado.error else "no se confirmo"))
-                    bloqueadas[alias] = motivo
-                    log.error(f"Cuenta {alias} bloqueada por el resto del lote: {motivo}.")
-                resultados.append(resultado)
+            t0 = time.monotonic()
+            try:
+                resultado = self._colocar_una(trabajo, etiqueta)
+            except OperacionAbortada as e:
+                log.warning(f"ABORTO antes del clic final: la orden #{i} NO se coloco.")
+                resultados.append(ResultadoOrden(
+                    etiqueta, alias, omitida=True, detalle=str(e),
+                    elapsed=time.monotonic() - t0))
+                resultados.extend(self._omitidas(trabajos, i + 1, "abortado con stop"))
+                break
+            except Exception as e:
+                log.exception(f"Fallo colocando la orden #{i} ({etiqueta})")
+                resultado = ResultadoOrden(etiqueta, alias, error=str(e) or type(e).__name__)
+            resultado.elapsed = resultado.elapsed or (time.monotonic() - t0)
+
+            if resultado.bloquea_la_cuenta:
+                motivo = (f"la orden #{i} " +
+                          ("fallo" if resultado.error else "no se confirmo"))
+                bloqueadas[alias] = motivo
+                log.error(f"Cuenta {alias} bloqueada por el resto del lote: {motivo}.")
+            resultados.append(resultado)
         return resultados
 
     @staticmethod
@@ -236,9 +241,10 @@ class EjecutorBase:
 
 
 def crear_ejecutor(config) -> EjecutorBase:
-    """El ejecutor que corresponde a esta config.
+    """El ejecutor de verdad: el web. Crearlo NO abre ningun navegador ni
+    importa Playwright; eso pasa recien con la primera orden.
 
-    Etapa 1: siempre el falso. La Etapa 2 agrega el web.
+    El falso (ejecutor_falso.py) queda para los tests.
     """
-    from ejecutor_falso import EjecutorFalso
-    return EjecutorFalso(dry_run=config.dry_run)
+    from ejecutor_web import EjecutorWeb
+    return EjecutorWeb(config)

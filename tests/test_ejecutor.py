@@ -129,9 +129,6 @@ class TestEjecutorFalso(unittest.TestCase):
         self.assertIn("EJECUTOR FALSO", logs.output[0])
         self.assertEqual(ej.cerrar_cuentas(["TV1"]), {"TV1": 0})
 
-    def test_es_el_de_la_etapa_1(self):
-        self.assertIsInstance(ejecutor.crear_ejecutor(config_de_prueba()), EjecutorFalso)
-
     def test_hereda_el_dry_run_de_la_config(self):
         self.assertTrue(ejecutor.crear_ejecutor(config_de_prueba()).dry_run)
 

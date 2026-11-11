@@ -1,6 +1,6 @@
 """Red de seguridad de la suite: ningun test puede salir a la red, lanzar el
-actualizador, escribir el programadas.json real ni depender de la config de
-ESTA maquina.
+actualizador, abrir un navegador real, escribir el programadas.json real ni
+depender de la config de ESTA maquina.
 
 POR QUE EXISTE. La suite no corre solo en la PC de desarrollo: es el
 SEMAFORO del update. actualizar.ps1 la ejecuta en cada maquina antes de
@@ -63,7 +63,21 @@ def _popen_bloqueado(*args, **kwargs):
 _lf.subprocess = SimpleNamespace(Popen=_popen_bloqueado)
 
 
-# 4. Config NEUTRA: la suite no puede depender del config.local.json de esta
+# 4. Ningun test abre un navegador REAL. Los del ejecutor web le pasan un
+#    Playwright falso (tests/navegador_falso.py); lo que llegue aca es una
+#    fuga. Va antes de crear cualquier ejecutor.
+import ejecutor_web as _ew  # noqa: E402
+
+
+def _playwright_bloqueado():
+    raise RuntimeError("Un test intento abrir un navegador REAL. Pasale fabrica= "
+                       "con el Playwright falso de tests/navegador_falso.py.")
+
+
+_ew._fabrica_real = _playwright_bloqueado
+
+
+# 5. Config NEUTRA: la suite no puede depender del config.local.json de esta
 #    maquina (prefijo, cuentas, dry_run...).
 from tests.apoyo import config_de_prueba  # noqa: E402
 

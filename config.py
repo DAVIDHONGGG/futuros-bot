@@ -363,6 +363,37 @@ class Config:
         return True if valor is None else bool(valor)
 
     @property
+    def navegador(self) -> dict:
+        """Opciones del navegador (config.json, "navegador"), con defaults.
+
+        headless: sin ventana. Algunas plataformas lo detectan; por eso no es
+            el default, y no_robar_foco resuelve lo de la ventana de otra forma.
+        canal: null = el Chromium de Playwright; "msedge" o "chrome" = el
+            navegador instalado en Windows (no hace falta descargar nada).
+        timeout_ms: tope de cada accion (click, escribir...).
+        carga_ms: tope para abrir la pagina de la plataforma.
+        segundos_verificacion: cuanto se espera a ver la posicion tras el clic.
+        """
+        valores = {"headless": False, "canal": None, "timeout_ms": 10000,
+                   "carga_ms": 30000, "segundos_verificacion": 10}
+        crudo = self.get("navegador") or {}
+        if isinstance(crudo, dict):
+            for clave, defecto in valores.items():
+                if clave not in crudo or crudo[clave] in ("", None):
+                    continue
+                valor = crudo[clave]
+                if isinstance(defecto, bool):
+                    valores[clave] = valor is True
+                elif isinstance(defecto, int):
+                    try:
+                        valores[clave] = max(1, int(valor))
+                    except (TypeError, ValueError):
+                        pass
+                else:
+                    valores[clave] = str(valor)
+        return valores
+
+    @property
     def plataformas(self) -> dict:
         """{nombre_en_minusculas: dict} tal como esta en config.json."""
         valor = self.get("plataformas") or {}

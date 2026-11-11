@@ -35,6 +35,11 @@ class TestRedActiva(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             lf.subprocess.Popen(["powershell.exe", "-File", "actualizar.ps1"])
 
+    def test_no_se_puede_abrir_un_navegador_real(self):
+        import ejecutor_web
+        with self.assertRaises(RuntimeError):
+            ejecutor_web._fabrica_real()
+
     def test_la_config_es_la_neutra_y_no_la_de_esta_maquina(self):
         self.assertEqual(lf.CONFIG.machine_id, "PRUEBA")
         self.assertNotEqual(lf.CONFIG.base_dir, lf.BASE_DIR)

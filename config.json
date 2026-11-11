@@ -1,36 +1,137 @@
 {
   "_comentario": "Valores COMUNES a todas las maquinas: este archivo viaja con el update. NO pongas tokens ni cuentas aca. Cada PC agrega lo suyo en config.local.json, que SOLO puede llevar las claves de CLAVES_LOCALES (ver config.py). Cualquier otra clave copiada al local pisa a esta y deja a esa maquina sin los cambios de la flota: el listener lo avisa al arrancar y 'python config.py' muestra de donde sale cada valor.",
-
   "_dry_run": "Arranca en seco a proposito: llena la orden y NO hace clic en Comprar/Vender. Para operar de verdad, \"dry_run\": false en el config.local.json de ESA maquina, recien cuando INSTALAR-MAQUINA-NUEVA.md este verificado completo. Sin valor en ningun lado, el codigo tambien asume true.",
   "dry_run": true,
-
   "_telegram_allowed_user_id": "Ids de usuario de TELEGRAM (no de cuentas) de quienes pueden darle ordenes al bot, en TODAS las maquinas. Se SUMA con lo que tenga cada config.local.json. Todos pueden abrir y cerrar posiciones de verdad. Los mismos que en el bot de MT5: 7701232053 = Van3, 6116212503 = Luis, 8979220838 = Mariano. Para sumar a alguien, que le mande cualquier mensaje a @userinfobot y agrega el numero.",
   "telegram_allowed_user_id": [
     6116212503,
     7701232053,
     8979220838
   ],
-
   "_telegram_chat_errores": "chat_id del grupo donde las maquinas avisan SOLO errores y un latido diario. null = apagado. Para conseguirlo: escribi 'PREFIJO chatid' en ese grupo.",
   "telegram_chat_errores": null,
-
   "_no_robar_foco": "true = el navegador nunca se trae al frente ni se dibuja encima de otras ventanas. Necesario si en la misma PC corre el bot de MT5: una ventana encima le tapa las plantillas y se lleva sus teclas.",
   "no_robar_foco": true,
-
-  "_plataformas": "Una entrada por terminal web. 'simbolos' traduce la raiz que se escribe en Telegram al contrato que se escribe en ESA plataforma (cambia en cada vencimiento: revisala en cada roll). Lo que dice TODO no esta configurado y las ordenes se rechazan. url, selectores y pasos se completan en la Etapa 2 con 'playwright codegen <url>'.",
+  "_navegador": "headless: sin ventana (algunas plataformas lo detectan). canal: null = Chromium de Playwright (python -m playwright install chromium); \"msedge\" = el Edge de Windows. timeout_ms: tope de cada accion. carga_ms: tope para abrir la pagina. segundos_verificacion: cuanto se espera a ver la posicion despues del clic.",
+  "navegador": {
+    "headless": false,
+    "canal": null,
+    "timeout_ms": 10000,
+    "carga_ms": 30000,
+    "segundos_verificacion": 10
+  },
+  "_plataformas": "Una entrada por terminal web. Lo que dice TODO no esta configurado y el bot se NIEGA a operar en esa plataforma (no adivina selectores). Los selectores son de Playwright: CSS, text=..., role=button[name=\"...\"]. Se sacan con: python -m playwright codegen --user-data-dir perfiles\\ALIAS <url>. 'simbolos' traduce la raiz de Telegram al contrato de ESA plataforma y cambia en cada vencimiento: revisala en cada roll.",
   "plataformas": {
     "tradovate": {
       "url": "TODO: url del trader web de Tradovate",
+      "_simbolos": "Tradovate escribe el anio con UN digito (M6EZ6, MNQZ6, NQZ6: vistos en la plataforma el 11/11/2026). Ultimo dia de los Z6: MNQ/MES 18/12/2026, M6E 14/12/2026; el volumen pasa a H7 unos dias antes: actualizar la tabla en el roll.",
       "simbolos": {
         "MNQ": "MNQZ6",
-        "MES": "MESZ6"
+        "MES": "MESZ6",
+        "M6E": "M6EZ6"
+      },
+      "_sesion_iniciada": "Selector de algo que SOLO se ve con la sesion iniciada (por ejemplo el boton de comprar del ticket). Si no aparece, el bot no opera y pide hacer el login a mano con abrir_perfil.py.",
+      "sesion_iniciada": "TODO: selector visible solo con la sesion iniciada en Tradovate",
+      "_pasos_seleccionar_cuenta": "Opcional: si un mismo login tiene varias cuentas, los pasos para elegir la de la orden. {cuenta_plataforma} sale de la cuenta en config.local.json. Lista vacia = no hace falta.",
+      "pasos_seleccionar_cuenta": [],
+      "_pasos_orden": "Pasos para dejar el ticket listo, SIN el clic de Comprar/Vender. Acciones: click, escribir, click_texto, tecla, esperar. Marcadores: {contrato} {contratos} {sl_ticks} {tp_ticks} {accion} {simbolo} {cuenta_plataforma}. Verificar en la web que SL y TP esten en TICKS y no en puntos o dolares.",
+      "pasos_orden": [
+        {
+          "accion": "click",
+          "selector": "TODO: campo del simbolo"
+        },
+        {
+          "accion": "escribir",
+          "selector": "TODO: campo del simbolo",
+          "valor": "{contrato}"
+        },
+        {
+          "accion": "click_texto",
+          "texto": "{contrato}"
+        },
+        {
+          "accion": "escribir",
+          "selector": "TODO: campo de cantidad",
+          "valor": "{contratos}"
+        },
+        {
+          "accion": "escribir",
+          "selector": "TODO: campo de stop loss en ticks",
+          "valor": "{sl_ticks}"
+        },
+        {
+          "accion": "escribir",
+          "selector": "TODO: campo de take profit en ticks",
+          "valor": "{tp_ticks}"
+        }
+      ],
+      "boton_comprar": "TODO: selector del boton Comprar/Buy del ticket",
+      "boton_vender": "TODO: selector del boton Vender/Sell del ticket",
+      "_pasos_confirmar": "Opcional: si despues del clic aparece un dialogo de confirmacion. El stop se revisa antes de cada paso: ese es el clic final de verdad.",
+      "pasos_confirmar": [],
+      "_pasos_limpiar": "Opcional: como vaciar el ticket tras un dry_run o un error. Vacio = recargar la pagina.",
+      "pasos_limpiar": [],
+      "_posiciones": "Para verificar la orden: panel = el panel de posiciones; filas = cada fila (dentro del panel); cantidad = la celda de cantidad DENTRO de una fila. Se compara la cantidad, no la fila entera (el P&L cambia solo).",
+      "posiciones": {
+        "panel": "TODO: selector del panel de posiciones",
+        "filas": "TODO: selector de cada fila de posicion",
+        "cantidad": "TODO: selector de la celda de cantidad dentro de la fila"
       }
     },
     "topstepx": {
-      "url": "TODO: url del trader web de TopstepX",
+      "url": "https://topstepx.com/trade",
+      "_simbolos": "TopstepX escribe el anio con DOS digitos (M6EZ26 = Micro EUR/USD diciembre 2026, visto en la plataforma el 11/11/2026). MNQ y MES siguen el mismo patron: confirmar en el selector de contrato. Ultimo dia de los Z26: MNQ/MES 18/12/2026, M6E 14/12/2026; el volumen pasa a H27 unos dias antes: actualizar la tabla en el roll.",
       "simbolos": {
-        "MNQ": "TODO: contrato MNQ tal como lo escribe TopstepX",
-        "MES": "TODO: contrato MES tal como lo escribe TopstepX"
+        "MNQ": "MNQZ26",
+        "MES": "MESZ26",
+        "M6E": "M6EZ26"
+      },
+      "_sesion_iniciada": "Selector de algo que SOLO se ve con la sesion iniciada (por ejemplo el boton de comprar del ticket). Si no aparece, el bot no opera y pide hacer el login a mano con abrir_perfil.py.",
+      "sesion_iniciada": "TODO: selector visible solo con la sesion iniciada en TopstepX",
+      "_pasos_seleccionar_cuenta": "Opcional: si un mismo login tiene varias cuentas, los pasos para elegir la de la orden. {cuenta_plataforma} sale de la cuenta en config.local.json. Lista vacia = no hace falta.",
+      "pasos_seleccionar_cuenta": [],
+      "_pasos_orden": "Pasos para dejar el ticket listo, SIN el clic de Comprar/Vender. Acciones: click, escribir, click_texto, tecla, esperar. Marcadores: {contrato} {contratos} {sl_ticks} {tp_ticks} {accion} {simbolo} {cuenta_plataforma}. Verificar en la web que SL y TP esten en TICKS y no en puntos o dolares.",
+      "pasos_orden": [
+        {
+          "accion": "click",
+          "selector": "TODO: campo del simbolo"
+        },
+        {
+          "accion": "escribir",
+          "selector": "TODO: campo del simbolo",
+          "valor": "{contrato}"
+        },
+        {
+          "accion": "click_texto",
+          "texto": "{contrato}"
+        },
+        {
+          "accion": "escribir",
+          "selector": "TODO: campo de cantidad",
+          "valor": "{contratos}"
+        },
+        {
+          "accion": "escribir",
+          "selector": "TODO: campo de stop loss en ticks",
+          "valor": "{sl_ticks}"
+        },
+        {
+          "accion": "escribir",
+          "selector": "TODO: campo de take profit en ticks",
+          "valor": "{tp_ticks}"
+        }
+      ],
+      "boton_comprar": "TODO: selector del boton Comprar/Buy del ticket",
+      "boton_vender": "TODO: selector del boton Vender/Sell del ticket",
+      "_pasos_confirmar": "Opcional: si despues del clic aparece un dialogo de confirmacion. El stop se revisa antes de cada paso: ese es el clic final de verdad.",
+      "pasos_confirmar": [],
+      "_pasos_limpiar": "Opcional: como vaciar el ticket tras un dry_run o un error. Vacio = recargar la pagina.",
+      "pasos_limpiar": [],
+      "_posiciones": "Para verificar la orden: panel = el panel de posiciones; filas = cada fila (dentro del panel); cantidad = la celda de cantidad DENTRO de una fila. Se compara la cantidad, no la fila entera (el P&L cambia solo).",
+      "posiciones": {
+        "panel": "TODO: selector del panel de posiciones",
+        "filas": "TODO: selector de cada fila de posicion",
+        "cantidad": "TODO: selector de la celda de cantidad dentro de la fila"
       }
     }
   }

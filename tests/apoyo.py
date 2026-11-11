@@ -29,8 +29,28 @@ FLOTA_PRUEBA = {
     "dry_run": True,
     "telegram_allowed_user_id": [USUARIO],
     "telegram_chat_errores": None,
+    "navegador": {"timeout_ms": 100, "carga_ms": 100, "segundos_verificacion": 1},
     "plataformas": {
-        "tradovate": {"url": "TODO", "simbolos": {"MNQ": "MNQZ6", "MES": "MESZ6"}},
+        # Completa, con selectores inventados para el navegador falso.
+        "tradovate": {
+            "url": "https://tradovate.prueba/trader",
+            "simbolos": {"MNQ": "MNQZ6", "MES": "MESZ6"},
+            "sesion_iniciada": "#ticket",
+            "pasos_orden": [
+                {"accion": "click", "selector": "#simbolo"},
+                {"accion": "escribir", "selector": "#simbolo", "valor": "{contrato}"},
+                {"accion": "tecla", "tecla": "Enter"},
+                {"accion": "escribir", "selector": "#cantidad", "valor": "{contratos}"},
+                {"accion": "escribir", "selector": "#sl", "valor": "{sl_ticks}"},
+                {"accion": "escribir", "selector": "#tp", "valor": "{tp_ticks}"},
+            ],
+            "boton_comprar": "#comprar",
+            "boton_vender": "#vender",
+            "pasos_limpiar": [{"accion": "tecla", "tecla": "Escape"}],
+            "posiciones": {"panel": "#posiciones", "filas": "#posiciones .fila",
+                           "cantidad": ".cantidad"},
+        },
+        # Con TODO: el ejecutor web se tiene que negar a operar aca.
         "topstepx": {"url": "TODO", "simbolos": {"MNQ": "MNQ-TSX", "MES": "TODO: falta"}},
     },
 }
