@@ -1,0 +1,20 @@
+# Configuracion de ESTA maquina: tiene el token del bot. Nunca se versiona.
+config.local.json
+*.json.tmp
+
+__pycache__/
+*.pyc
+logs/
+
+# Estado de ESTA maquina: lo programado que todavia no se ejecuto.
+programadas.json
+
+# Perfiles de navegador persistentes de cada cuenta (sesion iniciada a mano
+# por el operador). Son de ESTA maquina y contienen cookies de sesion.
+perfiles/
+
+# Ajustes locales de Claude Code.
+.claude/settings.local.json
+
+# Interprete embebido, si alguna vez se usa (son cientos de MB).
+python-portable/

@@ -1,0 +1,24 @@
+{
+  "_comentario": "Copia este archivo como config.local.json y edita los valores de ESTA maquina. Lleva SOLO lo que cambia de una PC a otra. NO copies aca nada de config.json (dry_run de la flota, plataformas, simbolos...): lo pisarias y esta maquina dejaria de recibir los cambios de la flota.",
+
+  "machine_id": "FUT1",
+
+  "_prefijo_telegram": "OBLIGATORIO. Solo se ejecutan las lineas del grupo que empiezan con este prefijo (o con ALL). Sin prefijo el listener no arranca.",
+  "prefijo_telegram": "FUT1",
+
+  "_telegram_bot_token": "El de SU PROPIO bot de @BotFather. Un token no se comparte entre maquinas ni con el bot de MT5: los dos se robarian los mensajes.",
+  "telegram_bot_token": "PONE_ACA_EL_TOKEN_DE_BOTFATHER",
+
+  "_dry_run": "true hasta terminar las verificaciones de INSTALAR-MAQUINA-NUEVA.md.",
+  "dry_run": true,
+
+  "_cuentas": "Una entrada por cuenta que opera ESTA maquina. El alias es como se la nombra en Telegram (letras/numeros/-/_). plataforma = una de config.json. max_contratos = tope por orden. perfil (opcional, default perfiles/ALIAS) = carpeta del navegador donde el operador hace el login a mano UNA vez.",
+  "cuentas": {
+    "TS1": {"plataforma": "topstepx", "max_contratos": 1}
+  },
+
+  "_cuenta_por_defecto": "Donde va una orden que no nombra cuenta, y que cuenta cierra un 'close' a secas. Con una sola cuenta no hace falta.",
+  "cuenta_por_defecto": null,
+
+  "_no_robar_foco": "Vive en config.json (true). Solo ponelo aca en false si ESTA maquina no corre el bot de MT5 y queres ver el navegador."
+}

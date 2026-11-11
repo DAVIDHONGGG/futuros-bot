@@ -1,0 +1,37 @@
+{
+  "_comentario": "Valores COMUNES a todas las maquinas: este archivo viaja con el update. NO pongas tokens ni cuentas aca. Cada PC agrega lo suyo en config.local.json, que SOLO puede llevar las claves de CLAVES_LOCALES (ver config.py). Cualquier otra clave copiada al local pisa a esta y deja a esa maquina sin los cambios de la flota: el listener lo avisa al arrancar y 'python config.py' muestra de donde sale cada valor.",
+
+  "_dry_run": "Arranca en seco a proposito: llena la orden y NO hace clic en Comprar/Vender. Para operar de verdad, \"dry_run\": false en el config.local.json de ESA maquina, recien cuando INSTALAR-MAQUINA-NUEVA.md este verificado completo. Sin valor en ningun lado, el codigo tambien asume true.",
+  "dry_run": true,
+
+  "_telegram_allowed_user_id": "Ids de usuario de TELEGRAM (no de cuentas) de quienes pueden darle ordenes al bot, en TODAS las maquinas. Se SUMA con lo que tenga cada config.local.json. Todos pueden abrir y cerrar posiciones de verdad. Los mismos que en el bot de MT5: 7701232053 = Van3, 6116212503 = Luis, 8979220838 = Mariano. Para sumar a alguien, que le mande cualquier mensaje a @userinfobot y agrega el numero.",
+  "telegram_allowed_user_id": [
+    6116212503,
+    7701232053,
+    8979220838
+  ],
+
+  "_telegram_chat_errores": "chat_id del grupo donde las maquinas avisan SOLO errores y un latido diario. null = apagado. Para conseguirlo: escribi 'PREFIJO chatid' en ese grupo.",
+  "telegram_chat_errores": null,
+
+  "_no_robar_foco": "true = el navegador nunca se trae al frente ni se dibuja encima de otras ventanas. Necesario si en la misma PC corre el bot de MT5: una ventana encima le tapa las plantillas y se lleva sus teclas.",
+  "no_robar_foco": true,
+
+  "_plataformas": "Una entrada por terminal web. 'simbolos' traduce la raiz que se escribe en Telegram al contrato que se escribe en ESA plataforma (cambia en cada vencimiento: revisala en cada roll). Lo que dice TODO no esta configurado y las ordenes se rechazan. url, selectores y pasos se completan en la Etapa 2 con 'playwright codegen <url>'.",
+  "plataformas": {
+    "tradovate": {
+      "url": "TODO: url del trader web de Tradovate",
+      "simbolos": {
+        "MNQ": "MNQZ6",
+        "MES": "MESZ6"
+      }
+    },
+    "topstepx": {
+      "url": "TODO: url del trader web de TopstepX",
+      "simbolos": {
+        "MNQ": "TODO: contrato MNQ tal como lo escribe TopstepX",
+        "MES": "TODO: contrato MES tal como lo escribe TopstepX"
+      }
+    }
+  }
+}
