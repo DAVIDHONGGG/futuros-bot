@@ -130,12 +130,57 @@ Todo lleva nombres propios a propósito:
 ## Estado (11/11/2026)
 
 - **Etapa 1** (listener, parser, ejecutor falso) y **Etapa 2** (ejecutor web,
-  solo colocar órdenes): hechas. 220 tests en verde.
+  solo colocar órdenes): hechas. 255 tests en verde (con el tope de riesgo y
+  los pasos del bracket en dólares).
 - `telegram_allowed_user_id` en `config.json`: los mismos tres ids de Telegram
   que la flota de MT5 (lo confirmó el usuario).
 - **El bot va a correr en otra PC**, no en la de desarrollo. Ahí hay que
   instalar todo, hacer el login en los perfiles y sacar los selectores.
 - Nada de los selectores está medido: las dos plataformas están en `TODO`.
+  (Desactualizado: ver "PC FUTVAN" abajo para TopstepX.)
+
+### PC FUTVAN: TopstepX medido (11/11/2026)
+
+Máquina con el bot de MT5 corriendo al lado; opera **solo TopstepX** (Tradovate
+está en otra PC). Prefijo `FUTVAN`, cuentas `TOP1`..`TOP5` (50K DLL Express,
+**un solo login**, perfil compartido `perfiles\TOPSTEPX`), `max_riesgo_usd: 800`.
+
+- **Chromium de Playwright no arranca** ahí ("side-by-side configuration is
+  incorrect", también reinstalado): `"canal": "msedge"` en `config.json`.
+- **El login con Google falla en un navegador automatizado** ("This browser
+  or app may not be secure"): lo bloquea Google, no TopstepX. Con el login
+  propio de TopstepX entra, y la sesión persiste en el perfil, incluso headless.
+- **Selectores**: todo con `data-testid` (ver `config.json`). Se midieron sin
+  ventana, sin clic en BUY/SELL, y los pasos de cuenta, contrato y cantidad se
+  probaron con el intérprete real: TOP2 y vuelta, MNQZ26 x3 (`BUY +3 MARKET`)
+  y vuelta a M6EZ26 x1.
+- **Cuenta**: el botón muestra `(...2304)`; la lista muestra el ACCT completo.
+  Se elige con `click_texto {cuenta_plataforma}` y se verifica `(...{cuenta_ultimos4})`.
+- **Contrato**: autocompletado de MUI. `fill()` **no filtra** (51 sugerencias)
+  y `fill("")` **no vacía** (React lo repone: quedaba `M6EZ26NQZ26`). Por eso
+  `escribir` tiene `"teclear": true` (clic, Ctrl+A, tecla por tecla).
+- **Cantidad**: no hay campo; preset `1` y `repetir` el `+`.
+- **SL/TP**: diálogo "Position Brackets" en **dólares** (`Risk (~$)` /
+  `Profit (~$)`), por cuenta, sin botón Guardar. Con "Automatically apply"
+  desmarcado o los campos vacíos, **la orden sale sin stop** (así estaba). El
+  bot escribe `{riesgo_usd}`/`{ganancia_usd}` (ticks x `valor_tick` x
+  contratos), `marcar` la casilla y `verificar` los dos valores.
+- **Fila de posición** (captura del operador con un short real de 1 M6E):
+  Symbol dice **`/M6E`** (raíz con barra, no `M6EZ26`) y Position `-1`. Por
+  eso `posiciones.texto_fila = "/{simbolo}"`: buscando el contrato, ninguna
+  orden real se habría confirmado. Risk $10 dejó el stop 8 ticks arriba
+  (8 x $1.25): el bracket es en dólares **de la posición entera**.
+- **Fila en el DOM** (medida con una segunda posición abierta): MUI DataGrid,
+  `[role='row'][data-id]` **dentro** del panel (Orders y Trades son tablas del
+  mismo tipo). `leer_posiciones` real devolvió `('-1',)` para M6E. Con esto
+  **TopstepX quedó completa** y el bot ya opera ahí (en `dry_run` hasta la
+  Etapa 4).
+- **Falta medir** (solo con la primera orden real mínima, Etapa 4): si aparece
+  un diálogo de confirmación después de BUY y si el bracket se aplica al
+  cerrar el diálogo.
+- Ojo con el **dry run** en TopstepX: no hace clic en BUY, pero **sí** llena el
+  bracket y marca "Automatically apply" en esa cuenta (queda puesto también
+  para las órdenes a mano).
 
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 
@@ -158,9 +203,9 @@ Todo lleva nombres propios a propósito:
 
 ### Pendiente
 
-1. **Paso `verificar`** (propuesto, sin aprobar todavía): leer el texto de un
-   elemento y cortar sin clic si no contiene lo esperado. Por ejemplo, que el
-   bracket diga "Enabled" y que el botón diga `+{contratos}`.
+1. ~~Paso `verificar`~~: hecho (11/11/2026), junto con `repetir`, `marcar`,
+   `escribir` con `teclear`, los marcadores `{riesgo_usd}`, `{ganancia_usd}`,
+   `{contratos_menos_1}` y `{cuenta_ultimos4}`, y el tope `max_riesgo_usd`.
 2. **Etapa 3**: cierres (cuenta por defecto, una cuenta o todas), multi-cuenta,
    latido con datos del navegador, `check_setup.py` completo (Playwright,
    Chromium, config, perfiles).

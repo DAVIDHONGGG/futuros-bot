@@ -41,6 +41,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 log = logging.getLogger("bot_futuros.config")
@@ -82,6 +83,7 @@ CLAVES_LOCALES = frozenset({
     "cuentas",
     "cuenta_por_defecto",
     "no_robar_foco",
+    "max_riesgo_usd",             # tope de riesgo por cuenta y por orden
 })
 
 # Un alias de cuenta no puede ser una de estas palabras: se confundiria con
@@ -189,6 +191,7 @@ class Config:
 
         self.valores = valores
         self._cuentas = self._validar_cuentas()
+        _ = self.max_riesgo_usd     # deja la advertencia si el valor es invalido
 
     # --- carga --------------------------------------------------------------
 
@@ -421,6 +424,47 @@ class Config:
             return next(iter(self._cuentas))
         return None
 
+    @property
+    def max_riesgo_usd(self):
+        """Tope de riesgo en USD por cuenta y por orden (Decimal), o None si
+        no hay tope. Riesgo = SL_TICKS x valor del tick x CONTRATOS.
+
+        Un valor que no se entiende NO apaga el tope: queda en 0 y toda orden
+        se rechaza, con una advertencia. Lo mismo que dry_run: ante la duda,
+        no operar.
+        """
+        valor = self.get("max_riesgo_usd")
+        if valor is None:
+            return None
+        numero = _decimal_positivo(valor)
+        if numero is None:
+            if not any("max_riesgo_usd" in a for a in self.advertencias):
+                self.advertencias.append(
+                    f"'max_riesgo_usd' tiene un valor invalido ({valor!r}): se rechaza "
+                    f"toda orden hasta corregirlo.")
+            return Decimal(0)
+        return numero
+
+    def valor_tick(self, simbolo: str) -> Decimal:
+        """USD por tick y por contrato de la raiz ("MNQ" -> 0.50), de la tabla
+        "valor_tick" de config.json.
+
+        Levanta ValueError si falta o es invalido: sin el valor del tick no se
+        puede calcular el riesgo, y adivinarlo es operar un riesgo que nadie
+        eligio.
+        """
+        tabla = self.get("valor_tick") or {}
+        if not isinstance(tabla, dict):
+            tabla = {}
+        tabla = {str(k).strip().upper(): v for k, v in tabla.items()}
+        crudo = tabla.get(simbolo.upper())
+        numero = None if es_sin_configurar(crudo) else _decimal_positivo(crudo)
+        if numero is None:
+            raise ValueError(
+                f"Falta el valor del tick de {simbolo.upper()} (tabla 'valor_tick' "
+                f"de config.json): sin eso no se puede calcular el riesgo en USD.")
+        return numero
+
     def contrato(self, plataforma: str, simbolo: str) -> str:
         """El nombre del contrato en esa plataforma ("MNQ" -> "MNQZ6").
 
@@ -478,8 +522,26 @@ class Config:
             ("cuentas", sorted(self._cuentas), self.origen.get("cuentas", "-")),
             ("cuenta_por_defecto", self.cuenta_por_defecto,
              self.origen.get("cuenta_por_defecto", "unica cuenta" if len(self._cuentas) == 1 else "-")),
+            ("max_riesgo_usd", self.max_riesgo_usd if self.max_riesgo_usd is not None
+             else "(sin tope)", self.origen.get("max_riesgo_usd", "-")),
+            ("valor_tick", self.get("valor_tick") or "(vacio)",
+             self.origen.get("valor_tick", "-")),
         ]
         return filas
+
+
+def _decimal_positivo(valor):
+    """Decimal > 0 a partir de un numero o texto ("0.5", 800), o None.
+    Un booleano no es un numero (True seria 1)."""
+    if isinstance(valor, bool):
+        return None
+    try:
+        numero = Decimal(str(valor).strip())
+    except (InvalidOperation, ValueError):
+        return None
+    if not numero.is_finite() or numero <= 0:
+        return None
+    return numero
 
 
 def _token_para_mostrar(token: str) -> str:

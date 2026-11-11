@@ -49,7 +49,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ejecutor import EjecutorBase, OperacionAbortada, ResultadoOrden, chequear_aborto, operacion
-from pasos import ejecutar_pasos, leer_posiciones, validar_plataforma, valores_de
+from pasos import ejecutar_pasos, leer_posiciones, texto_de_fila, validar_plataforma, valores_de
 
 log = logging.getLogger("bot_futuros.ejecutor_web")
 
@@ -188,8 +188,11 @@ class EjecutorWeb(EjecutorBase):
         comprar = trabajo["accion"] == "buy"
         boton = plataforma["boton_comprar" if comprar else "boton_vender"]
         nombre_boton = "Comprar" if comprar else "Vender"
+        en_usd = (f" = riesgo {trabajo['riesgo_usd']} / ganancia {trabajo['ganancia_usd']} USD"
+                  if trabajo.get("riesgo_usd") else "")
         log.info(f"Iniciando orden web {etiqueta} [{nombre_plataforma}, "
-                 f"{trabajo['contrato']}, SL {trabajo['sl_ticks']} TP {trabajo['tp_ticks']} ticks]")
+                 f"{trabajo['contrato']}, SL {trabajo['sl_ticks']} TP {trabajo['tp_ticks']} "
+                 f"ticks{en_usd}]")
 
         page = self._pagina(cuenta, plataforma)
 
@@ -199,7 +202,8 @@ class EjecutorWeb(EjecutorBase):
                 ejecutar_pasos(page, plataforma["pasos_seleccionar_cuenta"], valores, to,
                                "seleccionar cuenta")
             try:
-                antes = leer_posiciones(page, plataforma["posiciones"], trabajo["contrato"], to)
+                antes = leer_posiciones(page, plataforma["posiciones"],
+                                        texto_de_fila(plataforma["posiciones"], valores), to)
             except OperacionAbortada:
                 raise
             except Exception as e:
@@ -273,9 +277,11 @@ class EjecutorWeb(EjecutorBase):
         saber si la orden entro."""
         limite = time.monotonic() + self.opciones["segundos_verificacion"]
         to = self.opciones["timeout_ms"]
+        conf = plataforma["posiciones"]
+        buscado = texto_de_fila(conf, valores_de(trabajo, self.config.cuentas.get(trabajo["cuenta"])))
         despues = antes
         while True:
-            despues = leer_posiciones(page, plataforma["posiciones"], trabajo["contrato"], to)
+            despues = leer_posiciones(page, conf, buscado, to)
             if despues != antes:
                 return True, despues
             if time.monotonic() >= limite:

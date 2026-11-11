@@ -31,6 +31,7 @@ Cierres:
 
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 ACCIONES = {"buy", "sell"}
 
@@ -203,12 +204,43 @@ def resolver_cuentas(spec: str | None, config) -> list:
     return aliases
 
 
+def usd(valor) -> str:
+    """Decimal -> texto para escribir en la web y en los mensajes: sin ceros
+    de mas ("80", "12.5", "48.75"). Nunca notacion cientifica."""
+    texto = f"{Decimal(valor):.2f}"
+    return texto.rstrip("0").rstrip(".") if "." in texto else texto
+
+
+def riesgo_y_ganancia(orden: dict, config) -> tuple:
+    """(riesgo_usd, ganancia_usd) de la orden en UNA cuenta, como Decimal:
+    ticks x valor del tick x contratos. (None, None) si el simbolo no tiene
+    valor del tick y la maquina no tiene tope de riesgo (no hace falta)."""
+    try:
+        tick = config.valor_tick(orden["simbolo"])
+    except ValueError:
+        if config.max_riesgo_usd is not None:
+            raise          # con tope, sin el valor del tick no se puede controlar
+        return None, None
+    contratos = Decimal(orden["contratos"])
+    return (Decimal(orden["sl_ticks"]) * tick * contratos,
+            Decimal(orden["tp_ticks"]) * tick * contratos)
+
+
 def expandir_orden(orden: dict, config) -> list:
     """Una orden -> un trabajo por cuenta, con el contrato ya traducido.
 
     Valida todo lo que depende de la config: cuenta conocida, tope de
-    contratos de la cuenta, simbolo configurado en su plataforma.
+    contratos de la cuenta, simbolo configurado en su plataforma, y el tope
+    de riesgo en USD (max_riesgo_usd), que vale para CADA cuenta: una orden a
+    "all" con 5 cuentas arriesga el tope en cada una.
     """
+    riesgo, ganancia = riesgo_y_ganancia(orden, config)
+    tope = config.max_riesgo_usd
+    if tope is not None and riesgo > tope:
+        raise ValueError(
+            f"Riesgo {usd(riesgo)} USD por cuenta ({orden['sl_ticks']} ticks x "
+            f"{usd(config.valor_tick(orden['simbolo']))} USD x {orden['contratos']} "
+            f"contrato(s)) supera el maximo de {usd(tope)} USD.")
     trabajos = []
     for alias in resolver_cuentas(orden.get("cuenta"), config):
         cuenta = config.cuentas[alias]
@@ -222,6 +254,9 @@ def expandir_orden(orden: dict, config) -> list:
             "cuenta": alias,
             "plataforma": cuenta.plataforma,
             "contrato": contrato,
+            # Texto y no Decimal: el trabajo tiene que poder ir a disco (JSON).
+            "riesgo_usd": None if riesgo is None else usd(riesgo),
+            "ganancia_usd": None if ganancia is None else usd(ganancia),
         })
     return trabajos
 

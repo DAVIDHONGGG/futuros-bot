@@ -20,5 +20,8 @@
   "_cuenta_por_defecto": "Donde va una orden que no nombra cuenta, y que cuenta cierra un 'close' a secas. Con una sola cuenta no hace falta.",
   "cuenta_por_defecto": null,
 
+  "_max_riesgo_usd": "Tope de riesgo en USD por cuenta y por orden: SL_TICKS x valor del tick (valor_tick en config.json) x CONTRATOS. Una orden que lo supera se rechaza entera. Con 'all' vale para CADA cuenta. null = sin tope.",
+  "max_riesgo_usd": null,
+
   "_no_robar_foco": "Vive en config.json (true). Solo ponelo aca en false si ESTA maquina no corre el bot de MT5 y queres ver el navegador."
 }

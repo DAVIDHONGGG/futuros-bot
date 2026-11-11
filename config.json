@@ -12,13 +12,19 @@
   "telegram_chat_errores": null,
   "_no_robar_foco": "true = el navegador nunca se trae al frente ni se dibuja encima de otras ventanas. Necesario si en la misma PC corre el bot de MT5: una ventana encima le tapa las plantillas y se lleva sus teclas.",
   "no_robar_foco": true,
-  "_navegador": "headless: sin ventana (algunas plataformas lo detectan). canal: null = Chromium de Playwright (python -m playwright install chromium); \"msedge\" = el Edge de Windows. timeout_ms: tope de cada accion. carga_ms: tope para abrir la pagina. segundos_verificacion: cuanto se espera a ver la posicion despues del clic.",
+  "_navegador": "headless: sin ventana (algunas plataformas lo detectan). canal: null = Chromium de Playwright (python -m playwright install chromium); \"msedge\" = el Edge de Windows. Se usa msedge porque en la PC FUTVAN el Chromium 156 de Playwright no arranca (Windows: 'side-by-side configuration is incorrect', medido 11/11/2026, tambien tras reinstalarlo). timeout_ms: tope de cada accion. carga_ms: tope para abrir la pagina. segundos_verificacion: cuanto se espera a ver la posicion despues del clic.",
   "navegador": {
     "headless": false,
-    "canal": null,
+    "canal": "msedge",
     "timeout_ms": 10000,
     "carga_ms": 30000,
     "segundos_verificacion": 10
+  },
+  "_valor_tick": "USD por tick y por contrato de cada raiz (especificacion de CME): MNQ 0.25 pts x $2 = $0.50; MES 0.25 pts x $5 = $1.25; M6E 0.0001 x 12,500 EUR = $1.25. Con esto se calcula el riesgo (SL_TICKS x valor x CONTRATOS) contra max_riesgo_usd y los dolares del bracket ({riesgo_usd} / {ganancia_usd}). Un simbolo nuevo necesita su entrada aca o la orden se rechaza.",
+  "valor_tick": {
+    "MNQ": 0.5,
+    "MES": 1.25,
+    "M6E": 1.25
   },
   "_plataformas": "Una entrada por terminal web. Lo que dice TODO no esta configurado y el bot se NIEGA a operar en esa plataforma (no adivina selectores). Los selectores son de Playwright: CSS, text=..., role=button[name=\"...\"]. Se sacan con: python -m playwright codegen --user-data-dir perfiles\\ALIAS <url>. 'simbolos' traduce la raiz de Telegram al contrato de ESA plataforma y cambia en cada vencimiento: revisala en cada roll.",
   "plataformas": {
@@ -34,7 +40,7 @@
       "sesion_iniciada": "TODO: selector visible solo con la sesion iniciada en Tradovate",
       "_pasos_seleccionar_cuenta": "Opcional: si un mismo login tiene varias cuentas, los pasos para elegir la de la orden. {cuenta_plataforma} sale de la cuenta en config.local.json. Lista vacia = no hace falta.",
       "pasos_seleccionar_cuenta": [],
-      "_pasos_orden": "Pasos para dejar el ticket listo, SIN el clic de Comprar/Vender. Acciones: click, escribir, click_texto, tecla, esperar. Marcadores: {contrato} {contratos} {sl_ticks} {tp_ticks} {accion} {simbolo} {cuenta_plataforma}. Verificar en la web que SL y TP esten en TICKS y no en puntos o dolares.",
+      "_pasos_orden": "Pasos para dejar el ticket listo, SIN el clic de Comprar/Vender. Acciones: click, escribir, click_texto, tecla, esperar, repetir, marcar, verificar (detalle en pasos.py). Marcadores: {contrato} {contratos} {contratos_menos_1} {sl_ticks} {tp_ticks} {riesgo_usd} {ganancia_usd} {accion} {simbolo} {cuenta_plataforma} {cuenta_ultimos4}. Fijarse en la web en que unidad van SL y TP (ticks, puntos o dolares) y usar el marcador que corresponda.",
       "pasos_orden": [
         {
           "accion": "click",
@@ -80,6 +86,7 @@
     },
     "topstepx": {
       "url": "https://topstepx.com/trade",
+      "_medido": "Selectores MEDIDOS el 11/11/2026 en topstepx.com/trade (version 2.4.34.1), headless con el perfil del bot y sin clic en BUY/SELL: son data-testid de la plataforma. El SL/TP es el dialogo 'Position Brackets' en DOLARES (Risk/Profit ~$), por cuenta: se llena en cada orden despues de elegir la cuenta. 'Automatically apply' tiene que quedar marcado o la orden sale SIN stop. No hay campo de cantidad: se elige 1 y se suma con +. La fila de posicion se midio con una posicion real abierta. Sin medir todavia (solo con la primera orden real minima): si aparece confirmacion despues de BUY y si el bracket se aplica al cerrar el dialogo.",
       "_simbolos": "TopstepX escribe el anio con DOS digitos (M6EZ26 = Micro EUR/USD diciembre 2026, visto en la plataforma el 11/11/2026). MNQ y MES siguen el mismo patron: confirmar en el selector de contrato. Ultimo dia de los Z26: MNQ/MES 18/12/2026, M6E 14/12/2026; el volumen pasa a H27 unos dias antes: actualizar la tabla en el roll.",
       "simbolos": {
         "MNQ": "MNQZ26",
@@ -87,51 +94,101 @@
         "M6E": "M6EZ26"
       },
       "_sesion_iniciada": "Selector de algo que SOLO se ve con la sesion iniciada (por ejemplo el boton de comprar del ticket). Si no aparece, el bot no opera y pide hacer el login a mano con abrir_perfil.py.",
-      "sesion_iniciada": "TODO: selector visible solo con la sesion iniciada en TopstepX",
+      "sesion_iniciada": "[data-testid='account-selector-input-select-account']",
       "_pasos_seleccionar_cuenta": "Opcional: si un mismo login tiene varias cuentas, los pasos para elegir la de la orden. {cuenta_plataforma} sale de la cuenta en config.local.json. Lista vacia = no hace falta.",
-      "pasos_seleccionar_cuenta": [],
-      "_pasos_orden": "Pasos para dejar el ticket listo, SIN el clic de Comprar/Vender. Acciones: click, escribir, click_texto, tecla, esperar. Marcadores: {contrato} {contratos} {sl_ticks} {tp_ticks} {accion} {simbolo} {cuenta_plataforma}. Verificar en la web que SL y TP esten en TICKS y no en puntos o dolares.",
-      "pasos_orden": [
+      "pasos_seleccionar_cuenta": [
         {
           "accion": "click",
-          "selector": "TODO: campo del simbolo"
-        },
-        {
-          "accion": "escribir",
-          "selector": "TODO: campo del simbolo",
-          "valor": "{contrato}"
+          "selector": "[data-testid='account-selector-input-select-account']"
         },
         {
           "accion": "click_texto",
-          "texto": "{contrato}"
+          "texto": "{cuenta_plataforma}"
         },
         {
-          "accion": "escribir",
-          "selector": "TODO: campo de cantidad",
-          "valor": "{contratos}"
-        },
-        {
-          "accion": "escribir",
-          "selector": "TODO: campo de stop loss en ticks",
-          "valor": "{sl_ticks}"
-        },
-        {
-          "accion": "escribir",
-          "selector": "TODO: campo de take profit en ticks",
-          "valor": "{tp_ticks}"
+          "accion": "verificar",
+          "selector": "[data-testid='account-selector-input-select-account']",
+          "contiene": "(...{cuenta_ultimos4})"
         }
       ],
-      "boton_comprar": "TODO: selector del boton Comprar/Buy del ticket",
-      "boton_vender": "TODO: selector del boton Vender/Sell del ticket",
+      "_pasos_orden": "Pasos para dejar el ticket listo, SIN el clic de Comprar/Vender. Acciones: click, escribir, click_texto, tecla, esperar, repetir, marcar, verificar (detalle en pasos.py). Marcadores: {contrato} {contratos} {contratos_menos_1} {sl_ticks} {tp_ticks} {riesgo_usd} {ganancia_usd} {accion} {simbolo} {cuenta_plataforma} {cuenta_ultimos4}. Fijarse en la web en que unidad van SL y TP (ticks, puntos o dolares) y usar el marcador que corresponda.",
+      "pasos_orden": [
+        {
+          "accion": "escribir",
+          "selector": "[data-testid='contract-selector-input-select-contract'] input",
+          "valor": "{contrato}",
+          "teclear": true
+        },
+        {
+          "accion": "click",
+          "selector": ".MuiAutocomplete-popper li[role='option']"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='contract-selector-input-select-contract'] input",
+          "igual": "{contrato}"
+        },
+        {
+          "accion": "click",
+          "selector": "[data-testid='quantity-preset-click-button-1']"
+        },
+        {
+          "accion": "repetir",
+          "selector": "[data-testid='quantity-click-button-increment']",
+          "veces": "{contratos_menos_1}"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='dom-click-button-buy']",
+          "contiene": "+{contratos} MARKET"
+        },
+        {
+          "accion": "click",
+          "selector": "[data-testid='oco-bracket-selector-click-button-settings']"
+        },
+        {
+          "accion": "escribir",
+          "selector": "[data-testid='auto-oco-brackets-input-field-risk'] input",
+          "valor": "{riesgo_usd}"
+        },
+        {
+          "accion": "escribir",
+          "selector": "[data-testid='auto-oco-brackets-input-field-profit'] input",
+          "valor": "{ganancia_usd}"
+        },
+        {
+          "accion": "marcar",
+          "selector": "[role='dialog'] input[type='checkbox']"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='auto-oco-brackets-input-field-risk'] input",
+          "igual": "{riesgo_usd}",
+          "numerico": true
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='auto-oco-brackets-input-field-profit'] input",
+          "igual": "{ganancia_usd}",
+          "numerico": true
+        },
+        {
+          "accion": "click",
+          "selector": "[role='dialog'] button[aria-label='close']"
+        }
+      ],
+      "boton_comprar": "[data-testid='dom-click-button-buy']",
+      "boton_vender": "[data-testid='dom-click-button-sell']",
       "_pasos_confirmar": "Opcional: si despues del clic aparece un dialogo de confirmacion. El stop se revisa antes de cada paso: ese es el clic final de verdad.",
       "pasos_confirmar": [],
       "_pasos_limpiar": "Opcional: como vaciar el ticket tras un dry_run o un error. Vacio = recargar la pagina.",
       "pasos_limpiar": [],
-      "_posiciones": "Para verificar la orden: panel = el panel de posiciones; filas = cada fila (dentro del panel); cantidad = la celda de cantidad DENTRO de una fila. Se compara la cantidad, no la fila entera (el P&L cambia solo).",
+      "_posiciones": "Para verificar la orden: panel = el panel de posiciones; filas = cada fila (dentro del panel); cantidad = la celda de cantidad DENTRO de una fila; texto_fila = lo que identifica al contrato en la fila. Se compara la cantidad, no la fila entera (el P&L cambia solo). Visto en una posicion real (captura del operador, 11/11/2026): la columna Symbol dice '/M6E' (raiz con barra, NO 'M6EZ26') y Position dice '-1' en una venta. Medido en el DOM con una posicion abierta (short 1 M6E en TOP1): fila = [role='row'][data-id] (el encabezado no tiene data-id), celdas data-field symbolName '/M6E' y positionSize '-1'. Las filas se buscan DENTRO del panel: Orders y Trades son tablas del mismo tipo. leer_posiciones real devolvio ('-1',) para M6E y () para MNQ/MES.",
       "posiciones": {
-        "panel": "TODO: selector del panel de posiciones",
-        "filas": "TODO: selector de cada fila de posicion",
-        "cantidad": "TODO: selector de la celda de cantidad dentro de la fila"
+        "panel": "[data-testid='positions-display-table']",
+        "filas": "[data-testid='positions-display-table'] [role='row'][data-id]",
+        "cantidad": "[data-field='positionSize']",
+        "texto_fila": "/{simbolo}"
       }
     }
   }

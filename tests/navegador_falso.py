@@ -11,6 +11,7 @@ pasa en el hilo del navegador, y deja simular lo que hace falta:
     pagina.sin_panel = True                 el panel de posiciones no aparece
     pagina.falla_en = {"#cantidad"}         esos selectores levantan error
     pagina.falla_al_clic = {"#comprar"}     se ve, pero el clic falla
+    pagina.textos = {"#boton": "BUY +2"}    lo que lee un paso "verificar"
 """
 
 import itertools
@@ -64,6 +65,20 @@ class LocatorFalso:
         self._chequear()
         self.pagina._reg("tecla", self.selector, tecla)
 
+    def press_sequentially(self, texto, delay=None, timeout=None):
+        self._chequear()
+        self.pagina._reg("teclear", self.selector, texto)
+
+    def check(self, timeout=None):
+        self._chequear()
+        self.pagina._reg("marcar", self.selector)
+
+    def evaluate(self, _expresion, arg=None, timeout=None):
+        """Lo usa el paso "verificar" para leer un valor o un texto."""
+        self._chequear()
+        self.pagina._reg("leer", self.selector)
+        return self.pagina.textos.get(self.selector, "")
+
     def wait_for(self, state="visible", timeout=None):
         self._chequear()
         self.pagina._reg("esperar", self.selector)
@@ -114,6 +129,7 @@ class PaginaFalsa:
         self.sin_panel = False
         self.falla_en = set()
         self.falla_al_clic = set()
+        self.textos = {}           # selector -> lo que lee "verificar"
         self.selector_sesion = "#ticket"
         self.selector_panel = "#posiciones"
         self.capturas = []
