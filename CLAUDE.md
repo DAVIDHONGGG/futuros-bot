@@ -209,6 +209,14 @@ TopstepX se actualizó ese día (versión 2.4.36.2):
   - La cuenta queda bloqueada por el resto del lote.
   - Nunca cierra nada solo.
 - **TopstepX no pide confirmación después de BUY** (orden del usuario).
+- **Primera orden real del bot: se cortó antes de BUY** y no se colocó nada.
+  Si el ticket ya tiene el contrato, TopstepX **no filtra** el autocompletado
+  (muestra los 51), y el clic en "la opción" chocó con el modo estricto. El
+  dry run anterior había pasado de casualidad: el ticket tenía 6EZ26. Ahora se
+  hace `click_texto {contrato}` dentro de `.MuiAutocomplete-popper`
+  (`click_texto` acepta `selector` para acotar). Medido: 1 sola coincidencia
+  con el mismo contrato, con otro y de vuelta, y los pasos reales corrieron
+  4 veces seguidas sin BUY.
 - **Falta en vivo:** los `pasos_despues` del bot todavía no corrieron con una
   posición real. La primera orden real del bot es la prueba.
 - **Edge recuerda la posición de la ventana** en el perfil: después de que el bot

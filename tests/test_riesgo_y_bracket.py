@@ -223,6 +223,17 @@ class TestInterpretePasosNuevos(unittest.TestCase):
                                   ("teclear", "#c", "MNQZ6")])
         self.assertEqual(self.pw.acciones("escribir"), [], "no tiene que usar fill")
 
+    def test_click_texto_dentro_de_una_lista(self):
+        # TopstepX: con el mismo contrato ya elegido, la lista NO filtra (51
+        # opciones). Se elige por texto exacto y SOLO dentro de la lista.
+        self.correr({"accion": "click_texto", "texto": "{contrato}",
+                     "selector": ".MuiAutocomplete-popper"})
+        self.assertEqual(self.pw.clics(), [".MuiAutocomplete-popper >> texto=MNQZ6"])
+
+    def test_click_texto_con_selector_TODO_bloquea(self):
+        p = plataforma_con({"accion": "click_texto", "texto": "{contrato}", "selector": "TODO"})
+        self.assertIn("sin configurar", " | ".join(validar_plataforma("x", p)))
+
     def test_marcar_usa_check_y_no_click(self):
         # Un click desmarcaria una casilla que ya estaba marcada.
         self.correr({"accion": "marcar", "selector": "#auto"})
@@ -352,6 +363,17 @@ class TestConfigRealDeTopstepX(unittest.TestCase):
 
     # El SL/TP en dolares ya no va en el dialogo de brackets sino en la fila
     # de la posicion: ver tests/test_sl_tp_en_fila.py.
+
+    def test_el_contrato_se_elige_por_texto_exacto_dentro_de_la_lista(self):
+        # Primera orden real del bot (12/11/2026): con el contrato ya elegido
+        # "la opcion de la lista" eran 51 y la orden se corto antes de BUY.
+        pasos = self.tsx["pasos_orden"]
+        elegir = pasos[1]
+        self.assertEqual((elegir["accion"], elegir["texto"], elegir["selector"]),
+                         ("click_texto", "{contrato}", ".MuiAutocomplete-popper"))
+        self.assertNotIn("exacto", elegir)          # default: exacto
+        self.assertEqual(pasos[2]["accion"], "verificar")
+        self.assertEqual(pasos[2]["igual"], "{contrato}")
 
     def test_la_fila_se_busca_por_la_raiz_con_barra(self):
         self.assertEqual(self.tsx["posiciones"]["texto_fila"], "/{simbolo}")

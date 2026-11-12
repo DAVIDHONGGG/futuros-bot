@@ -10,6 +10,8 @@ Cada plataforma dice COMO capturar una orden con una lista de pasos:
     {"accion": "escribir",    "selector": "<selector>", "valor": "{contrato}", "teclear": true}
                               (tecla por tecla, para autocompletados que no filtran con fill)
     {"accion": "click_texto", "texto": "{contrato}"}
+    {"accion": "click_texto", "texto": "{contrato}", "selector": "<lista>"}
+                              (el texto exacto, buscado SOLO dentro de <lista>)
     {"accion": "tecla",       "tecla": "Enter"}                 (a la pagina)
     {"accion": "tecla",       "tecla": "Enter", "selector": "<selector>"}
     {"accion": "esperar",     "ms": 300}
@@ -114,7 +116,8 @@ def _problemas_de_pasos(nombre: str, pasos) -> list:
                 problemas.append(f"{donde}: '{campo}' sin configurar ({paso[campo]!r})")
         if accion == "esperar" and "ms" not in paso and "selector" not in paso:
             problemas.append(f"{donde}: esperar necesita 'ms' o 'selector'")
-        if "selector" in paso and accion in ("tecla", "esperar") and es_sin_configurar(paso["selector"]):
+        if ("selector" in paso and accion in ("tecla", "esperar", "click_texto")
+                and es_sin_configurar(paso["selector"])):
             problemas.append(f"{donde}: 'selector' sin configurar ({paso['selector']!r})")
         for campo in CAMPOS_CON_MARCADORES:
             for marcador in _PATRON_MARCADOR.findall(str(paso.get(campo, ""))):
@@ -294,8 +297,11 @@ def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: st
             else:
                 campo.fill(texto, timeout=timeout_ms)
         elif accion == "click_texto":
-            base.get_by_text(rellenar(paso["texto"], valores),
-                             exact=bool(paso.get("exacto", True))).click(timeout=timeout_ms)
+            # Con "selector", el texto se busca SOLO adentro de ese elemento
+            # (la lista de un autocompletado, por ejemplo).
+            dentro = base.locator(paso["selector"]) if paso.get("selector") else base
+            dentro.get_by_text(rellenar(paso["texto"], valores),
+                               exact=bool(paso.get("exacto", True))).click(timeout=timeout_ms)
         elif accion == "tecla":
             if paso.get("selector"):
                 base.locator(paso["selector"]).press(paso["tecla"], timeout=timeout_ms)

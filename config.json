@@ -120,8 +120,10 @@
           "teclear": true
         },
         {
-          "accion": "click",
-          "selector": ".MuiAutocomplete-popper li[role='option']"
+          "_por_que": "Se elige la opcion que dice EXACTAMENTE el contrato, dentro de la lista. Medido el 12/11/2026 (primera orden real del bot, cortada antes de BUY): si el ticket ya tiene ese contrato, TopstepX NO filtra y muestra los 51; 'la unica opcion' fallaba. Por texto exacto hay 1 sola coincidencia en los dos casos (medido: mismo contrato, otro y vuelta).",
+          "accion": "click_texto",
+          "texto": "{contrato}",
+          "selector": ".MuiAutocomplete-popper"
         },
         {
           "accion": "verificar",
