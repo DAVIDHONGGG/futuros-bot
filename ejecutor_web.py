@@ -30,6 +30,12 @@ FLUJO DE UNA ORDEN (en el hilo del navegador):
   8. verificar leyendo el panel: la CANTIDAD de la fila del contrato tiene
      que cambiar. Si no cambia en segundos_verificacion -> no confirmado, y
      EjecutorBase no coloca nada mas en esa cuenta en este lote.
+  9. pasos_despues (si la plataforma los tiene), sobre la FILA de la
+     posicion: en TopstepX es donde se cargan Risk y To Make. Sin mirar el
+     aborto. Si fallan, o si ya habia posicion en ese contrato (el SL/TP de
+     la fila es de toda la posicion), la orden queda "SIN SL/TP": alerta al
+     grupo de errores y la cuenta se bloquea por el resto del lote. Nunca se
+     cierra nada solo.
 
 VENTANA. Con no_robar_foco (default) la ventana se abre FUERA de la pantalla y
 nunca se trae al frente: en una PC con el bot de MT5, una ventana encima le
@@ -49,7 +55,8 @@ from datetime import datetime
 from pathlib import Path
 
 from ejecutor import EjecutorBase, OperacionAbortada, ResultadoOrden, chequear_aborto, operacion
-from pasos import ejecutar_pasos, leer_posiciones, texto_de_fila, validar_plataforma, valores_de
+from pasos import (ejecutar_pasos, fila_de, leer_posiciones, texto_de_fila,
+                   validar_plataforma, valores_de)
 
 log = logging.getLogger("bot_futuros.ejecutor_web")
 
@@ -218,6 +225,9 @@ class EjecutorWeb(EjecutorBase):
                 captura = self._capturar(page, alias, "dryrun")
                 log.warning(f"DRY_RUN activo: NO se hizo clic en {nombre_boton} ({etiqueta}). "
                             f"Captura: {captura}")
+                if plataforma.get("pasos_despues"):
+                    log.info("DRY_RUN: el SL/TP (pasos_despues) se carga en la fila de la "
+                             "posicion y sin posicion no se puede probar.")
                 self._limpiar(page, plataforma, valores)
                 return ResultadoOrden(
                     etiqueta, alias, confirmado=None,
@@ -268,8 +278,53 @@ class EjecutorWeb(EjecutorBase):
             return ResultadoOrden(etiqueta, alias, confirmado=False,
                                   detalle=f"la posicion no cambio (sigue {list(antes)})")
         log.info(f"Orden confirmada ({etiqueta}): posicion {list(antes)} -> {list(despues)}")
+        detalle = f"posicion {list(antes)} -> {list(despues)}"
+        if not plataforma.get("pasos_despues"):
+            return ResultadoOrden(etiqueta, alias, confirmado=True, detalle=detalle)
+
+        sin_proteccion = self._proteger(page, plataforma, trabajo, valores, antes, alias)
+        if sin_proteccion:
+            self._ultimo_error = f"{alias}: SIN SL/TP: {sin_proteccion}"[:200]
+            captura = self._capturar(page, alias, "sin-sl-tp")
+            log.error(f"POSICION ABIERTA SIN SL/TP CONFIRMADO en {alias} ({etiqueta}): "
+                      f"{sin_proteccion}. PONELO A MANO YA. Captura: {captura}")
+            return ResultadoOrden(etiqueta, alias, confirmado=True, detalle=detalle,
+                                  sin_proteccion=sin_proteccion)
+        log.info(f"SL/TP puestos y verificados en la fila ({etiqueta}): riesgo "
+                 f"{trabajo.get('riesgo_usd')} / ganancia {trabajo.get('ganancia_usd')} USD")
         return ResultadoOrden(etiqueta, alias, confirmado=True,
-                              detalle=f"posicion {list(antes)} -> {list(despues)}")
+                              detalle=f"{detalle}; SL/TP puestos")
+
+    def _proteger(self, page, plataforma, trabajo, valores, antes, alias):
+        """Corre pasos_despues sobre la fila de la posicion (SL/TP en TopstepX).
+        Devuelve None si quedo verificado, o el motivo por el que NO.
+
+        Nunca levanta: la orden ya salio y lo unico que importa es avisar.
+        Tampoco mira el aborto: un stop no puede dejar una posicion sin SL.
+        """
+        if antes:
+            # El Risk/To Make de la fila es de TODA la posicion: escribir el
+            # riesgo de ESTA orden sobre una posicion que ya existia lo dejaria
+            # mal. Mejor no tocar y avisar.
+            return (f"ya habia posicion en {trabajo['contrato']} antes de esta orden "
+                    f"({list(antes)}); el SL/TP de la fila es de TODA la posicion y "
+                    f"no se toco: revisalo")
+        conf = plataforma["posiciones"]
+        try:
+            fila = fila_de(page, conf, texto_de_fila(conf, valores))
+            ejecutar_pasos(page, plataforma["pasos_despues"], valores,
+                           self.opciones["timeout_ms"], "SL/TP", con_aborto=False, raiz=fila)
+        except Exception as e:
+            # WARNING y no ERROR: el aviso al grupo de errores es UNO, el de
+            # "POSICION ABIERTA SIN SL/TP" que arma quien llama.
+            log.warning(f"Fallaron los pasos de SL/TP en {alias}", exc_info=True)
+            # Que no quede una celda a medio editar con un valor que nadie confirmo.
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+            return str(e).splitlines()[0][:300] or type(e).__name__
+        return None
 
     def _verificar(self, page, plataforma, trabajo, antes):
         """(confirmado, despues): espera a que cambie la cantidad del contrato.

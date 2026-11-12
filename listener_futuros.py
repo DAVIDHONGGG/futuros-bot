@@ -200,6 +200,9 @@ def _estado_de(r) -> str:
         return f"no se hizo clic ({r.detalle or 'dry_run'})"
     if not r.confirmado:
         return "NO confirmada - revisa la plataforma"
+    if r.sin_proteccion:
+        return (f"confirmada PERO SIN SL/TP CONFIRMADO ({r.sin_proteccion}) - "
+                f"PONELO A MANO YA")
     return "confirmada"
 
 

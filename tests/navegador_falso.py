@@ -7,11 +7,16 @@ pasa en el hilo del navegador, y deja simular lo que hace falta:
     pagina.posiciones = {"MNQZ6": "1"}      lo que muestra el panel
     pagina.efecto_clic = fn(pagina, sel)    que pasa al hacer clic (llenar)
     pagina.al_escribir = fn(sel, valor)     gancho (ej. pedir un stop)
+    pagina.al_tecla = fn(pag, sel, tecla)   que pasa al apretar una tecla (Enter)
     pagina.sin_sesion = True                el selector de sesion no aparece
     pagina.sin_panel = True                 el panel de posiciones no aparece
     pagina.falla_en = {"#cantidad"}         esos selectores levantan error
     pagina.falla_al_clic = {"#comprar"}     se ve, pero el clic falla
     pagina.textos = {"#boton": "BUY +2"}    lo que lee un paso "verificar"
+
+Los locators relativos (la fila de una posicion, en pasos_despues) se
+registran con el selector compuesto, para poder ver que todo quedo DENTRO de
+la fila:  "#posiciones .fila[fila=/MNQ] >> [data-field='risk']".
 """
 
 import itertools
@@ -43,6 +48,21 @@ class LocatorFalso:
     def nth(self, _i):
         return self
 
+    def filter(self, has_text=None):
+        return LocatorFalso(self.pagina, f"{self.selector}[fila={has_text}]")
+
+    def locator(self, selector):
+        return LocatorFalso(self.pagina, f"{self.selector} >> {selector}")
+
+    def get_by_text(self, texto, exact=True):
+        return LocatorFalso(self.pagina, f"{self.selector} >> texto={texto}")
+
+    def dblclick(self, timeout=None):
+        self._chequear()
+        if self.selector in self.pagina.falla_al_clic:
+            raise ErrorFalso(f"{self.selector} no se pudo clickear (tapado)")
+        self.pagina._reg("doble_click", self.selector)
+
     def _chequear(self):
         if self.selector in self.pagina.falla_en:
             raise ErrorFalso(f"Timeout esperando {self.selector}")
@@ -64,6 +84,8 @@ class LocatorFalso:
     def press(self, tecla, timeout=None):
         self._chequear()
         self.pagina._reg("tecla", self.selector, tecla)
+        if self.pagina.al_tecla:
+            self.pagina.al_tecla(self.pagina, self.selector, tecla)
 
     def press_sequentially(self, texto, delay=None, timeout=None):
         self._chequear()
@@ -125,6 +147,7 @@ class PaginaFalsa:
         self.posiciones = {}
         self.efecto_clic = None
         self.al_escribir = None
+        self.al_tecla = None           # fn(pagina, selector, tecla)
         self.sin_sesion = False
         self.sin_panel = False
         self.falla_en = set()

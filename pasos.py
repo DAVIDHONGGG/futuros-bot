@@ -5,6 +5,7 @@ validacion.
 Cada plataforma dice COMO capturar una orden con una lista de pasos:
 
     {"accion": "click",       "selector": "<selector>"}
+    {"accion": "doble_click", "selector": "<selector>"}
     {"accion": "escribir",    "selector": "<selector>", "valor": "{contratos}"}
     {"accion": "escribir",    "selector": "<selector>", "valor": "{contrato}", "teclear": true}
                               (tecla por tecla, para autocompletados que no filtran con fill)
@@ -36,6 +37,13 @@ Marcadores:
     {riesgo_usd}          SL_TICKS x valor del tick x CONTRATOS ("80", "12.5")
     {ganancia_usd}        lo mismo con TP_TICKS
 
+pasos_despues: corren DESPUES de confirmar la posicion, y solo si la orden
+salio (nunca en dry_run). Sus selectores son RELATIVOS a la fila de la
+posicion del contrato (posiciones.filas que contenga texto_fila): asi
+"[data-field='risk'] input" no puede tocar otra fila. Es donde TopstepX carga
+el SL/TP: Risk y To Make se editan en la fila de la posicion (medido con una
+orden real el 12/11/2026).
+
 Todo lo de aca corre en el hilo del navegador (ver ejecutor_web.py). Antes de
 CADA paso se revisa el aborto: un "stop" a mitad de la captura corta ahi.
 """
@@ -45,8 +53,8 @@ import re
 from config import es_sin_configurar
 from ejecutor import chequear_aborto
 
-ACCIONES = {"click", "escribir", "click_texto", "tecla", "esperar", "repetir",
-            "marcar", "verificar"}
+ACCIONES = {"click", "doble_click", "escribir", "click_texto", "tecla", "esperar",
+            "repetir", "marcar", "verificar"}
 
 MARCADORES = {"simbolo", "contrato", "contratos", "sl_ticks", "tp_ticks", "accion",
               "cuenta_plataforma", "cuenta_ultimos4", "contratos_menos_1",
@@ -68,7 +76,7 @@ class VerificacionFallida(Exception):
 # Listas de pasos que puede tener una plataforma. Las obligatorias tienen que
 # estar y no vacias.
 LISTAS_DE_PASOS = ("pasos_orden", "pasos_seleccionar_cuenta", "pasos_confirmar",
-                   "pasos_limpiar")
+                   "pasos_limpiar", "pasos_despues")
 OBLIGATORIAS = ("url", "sesion_iniciada", "boton_comprar", "boton_vender")
 
 
@@ -88,6 +96,7 @@ def _problemas_de_pasos(nombre: str, pasos) -> list:
             continue
         requeridos = {
             "click": ["selector"],
+            "doble_click": ["selector"],
             "escribir": ["selector", "valor"],
             "click_texto": ["texto"],
             "tecla": ["tecla"],
@@ -208,6 +217,7 @@ def _leer(page, selector: str, timeout_ms: int) -> str:
 
 
 def verificar(page, paso: dict, valores: dict, timeout_ms: int, donde: str):
+    """`page` puede ser la pagina o un locator (la fila, en pasos_despues)."""
     leido = (_leer(page, paso["selector"], timeout_ms) or "").strip()
     if "igual" in paso:
         esperado = rellenar(paso["igual"], valores).strip()
@@ -249,22 +259,29 @@ def esperar_con_aborto(page, ms: int, donde: str):
 
 
 def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: str,
-                   con_aborto: bool = True):
+                   con_aborto: bool = True, raiz=None):
     """Corre los pasos en orden. Levanta OperacionAbortada si se pide parar
     entre pasos, o la excepcion de Playwright si un paso falla.
 
-    con_aborto=False es para los pasos de LIMPIEZA: justamente se corren
-    despues de un stop, y no pueden cortarse por el mismo stop.
+    con_aborto=False es para los pasos de LIMPIEZA y de PROTECCION: se corren
+    despues de un stop o con la posicion ya abierta, y no pueden cortarse por
+    un stop (dejar una posicion sin SL por un stop seria peor).
+
+    raiz: un locator (la fila de la posicion) contra el que se resuelven los
+    selectores. None = la pagina entera.
     """
+    base = page if raiz is None else raiz
     for n, paso in enumerate(pasos, start=1):
         donde = f"{nombre} paso {n} ({paso.get('accion')})"
         if con_aborto:
             chequear_aborto(donde)
         accion = paso["accion"]
         if accion == "click":
-            page.locator(paso["selector"]).click(timeout=timeout_ms)
+            base.locator(paso["selector"]).click(timeout=timeout_ms)
+        elif accion == "doble_click":
+            base.locator(paso["selector"]).dblclick(timeout=timeout_ms)
         elif accion == "escribir":
-            campo = page.locator(paso["selector"])
+            campo = base.locator(paso["selector"])
             texto = rellenar(paso["valor"], valores)
             if paso.get("teclear"):
                 # Como un operador: clic, seleccionar todo y teclear. Medido
@@ -277,16 +294,16 @@ def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: st
             else:
                 campo.fill(texto, timeout=timeout_ms)
         elif accion == "click_texto":
-            page.get_by_text(rellenar(paso["texto"], valores),
+            base.get_by_text(rellenar(paso["texto"], valores),
                              exact=bool(paso.get("exacto", True))).click(timeout=timeout_ms)
         elif accion == "tecla":
             if paso.get("selector"):
-                page.locator(paso["selector"]).press(paso["tecla"], timeout=timeout_ms)
+                base.locator(paso["selector"]).press(paso["tecla"], timeout=timeout_ms)
             else:
                 page.keyboard.press(paso["tecla"])
         elif accion == "esperar":
             if paso.get("selector"):
-                page.locator(paso["selector"]).wait_for(state="visible", timeout=timeout_ms)
+                base.locator(paso["selector"]).wait_for(state="visible", timeout=timeout_ms)
             if paso.get("ms"):
                 if con_aborto:
                     esperar_con_aborto(page, paso["ms"], donde)
@@ -296,11 +313,11 @@ def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: st
             for i in range(_veces(paso, valores, donde)):
                 if con_aborto:
                     chequear_aborto(f"{donde}, clic {i + 1}")
-                page.locator(paso["selector"]).click(timeout=timeout_ms)
+                base.locator(paso["selector"]).click(timeout=timeout_ms)
         elif accion == "marcar":
-            page.locator(paso["selector"]).check(timeout=timeout_ms)
+            base.locator(paso["selector"]).check(timeout=timeout_ms)
         elif accion == "verificar":
-            verificar(page, paso, valores, timeout_ms, donde)
+            verificar(base, paso, valores, timeout_ms, donde)
         else:   # validar_plataforma ya lo impide; por las dudas
             raise ValueError(f"{donde}: accion desconocida")
 
@@ -314,6 +331,13 @@ def texto_de_fila(conf: dict, valores: dict) -> str:
     marcadores, por ejemplo "/{simbolo}".
     """
     return rellenar(conf.get("texto_fila") or "{contrato}", valores)
+
+
+def fila_de(page, conf: dict, buscado: str):
+    """Locator de LA fila del contrato en el panel de posiciones. Si hubiera
+    mas de una, Playwright falla en el primer paso (modo estricto): editar
+    "alguna" fila no es aceptable."""
+    return page.locator(conf["filas"]).filter(has_text=buscado)
 
 
 def leer_posiciones(page, conf: dict, buscado: str, timeout_ms: int) -> tuple:

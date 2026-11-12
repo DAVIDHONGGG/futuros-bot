@@ -130,8 +130,8 @@ Todo lleva nombres propios a propósito:
 ## Estado (11/11/2026)
 
 - **Etapa 1** (listener, parser, ejecutor falso) y **Etapa 2** (ejecutor web,
-  solo colocar órdenes): hechas. 255 tests en verde (con el tope de riesgo y
-  los pasos del bracket en dólares).
+  solo colocar órdenes): hechas. 276 tests en verde (12/11/2026: tope de
+  riesgo y SL/TP en dólares en la fila de la posición).
 - `telegram_allowed_user_id` en `config.json`: los mismos tres ids de Telegram
   que la flota de MT5 (lo confirmó el usuario).
 - **El bot va a correr en otra PC**, no en la de desarrollo. Ahí hay que
@@ -160,7 +160,7 @@ está en otra PC). Prefijo `FUTVAN`, cuentas `TOP1`..`TOP5` (50K DLL Express,
   y `fill("")` **no vacía** (React lo repone: quedaba `M6EZ26NQZ26`). Por eso
   `escribir` tiene `"teclear": true` (clic, Ctrl+A, tecla por tecla).
 - **Cantidad**: no hay campo; preset `1` y `repetir` el `+`.
-- **SL/TP**: diálogo "Position Brackets" en **dólares** (`Risk (~$)` /
+- **SL/TP** (REEMPLAZADO el 12/11, ver abajo): diálogo "Position Brackets" en **dólares** (`Risk (~$)` /
   `Profit (~$)`), por cuenta, sin botón Guardar. Con "Automatically apply"
   desmarcado o los campos vacíos, **la orden sale sin stop** (así estaba). El
   bot escribe `{riesgo_usd}`/`{ganancia_usd}` (ticks x `valor_tick` x
@@ -175,12 +175,49 @@ está en otra PC). Prefijo `FUTVAN`, cuentas `TOP1`..`TOP5` (50K DLL Express,
   mismo tipo). `leer_posiciones` real devolvió `('-1',)` para M6E. Con esto
   **TopstepX quedó completa** y el bot ya opera ahí (en `dry_run` hasta la
   Etapa 4).
-- **Falta medir** (solo con la primera orden real mínima, Etapa 4): si aparece
-  un diálogo de confirmación después de BUY y si el bracket se aplica al
-  cerrar el diálogo.
-- Ojo con el **dry run** en TopstepX: no hace clic en BUY, pero **sí** llena el
-  bracket y marca "Automatically apply" en esa cuenta (queda puesto también
-  para las órdenes a mano).
+- ~~Falta medir confirmación y bracket~~: ver la sección de abajo, del 12/11.
+
+### PC FUTVAN, 12/11/2026: TopstepX cambió y el SL/TP pasó a la fila
+
+TopstepX se actualizó ese día (versión 2.4.36.2):
+
+- **Login unificado con el Dashboard**: la sesión del perfil se invalidó. El
+  primer dry run respondió "sesión no iniciada" con captura, sin llenar nada:
+  el chequeo de `sesion_iniciada` funcionó. Hubo que repetir el login con
+  `abrir_perfil.py`.
+- **El diálogo de brackets ahora tiene CANCEL / SAVE CHANGES** (aparecen al
+  editar). El bot lo cerraba con la X: **descartaba los valores**, y la
+  verificación pasaba igual porque leía los inputs antes de cerrar. Medido:
+  tras un dry run, Risk/Profit vacíos y "Automatically apply" desmarcado. **Una
+  orden real habría salido sin SL ni TP.** Lección: verificar lo GUARDADO, no
+  lo escrito.
+- **Solución: como el operador.** La entrada sale sin bracket, y el SL/TP se
+  carga en la **fila de la posición**. Se midió con una orden real que puso el
+  usuario (long 1 M6E en TOP1), con un script que solo observaba:
+  - las celdas son `[data-field='risk']` y `[data-field='toMake']`, cada una
+    con un `svg[data-icon='pencil']`;
+  - con doble clic la celda pasa a `MuiDataGrid-cell--editing` y aparece un
+    `input[type=number]` vacío;
+  - Enter confirma, y la celda muestra `$5.00`;
+  - son dólares de **toda la posición**: To Make $5 dejó el TP 4 ticks arriba.
+- **Cómo lo hace el bot:** etapa nueva `pasos_despues`, con selectores
+  **relativos a la fila** (`fila_de`) y acción nueva `doble_click`.
+  - Corre solo después de confirmar la posición, nunca en dry run.
+  - No mira el stop: con la posición abierta, cortar ahí la dejaría sin SL.
+- **Si falla, o si ya había posición en ese contrato:** `ResultadoOrden.sin_proteccion`.
+  - Manda **un** ERROR "POSICION ABIERTA SIN SL/TP CONFIRMADO", que va al grupo de errores.
+  - La cuenta queda bloqueada por el resto del lote.
+  - Nunca cierra nada solo.
+- **TopstepX no pide confirmación después de BUY** (orden del usuario).
+- **Falta en vivo:** los `pasos_despues` del bot todavía no corrieron con una
+  posición real. La primera orden real del bot es la prueba.
+- **Edge recuerda la posición de la ventana** en el perfil: después de que el bot
+  la abre fuera de pantalla, `abrir_perfil.py` la abre en (-32000, -32000) y
+  el operador no la ve. Hubo que moverla con SetWindowPos. Arreglo pendiente.
+- **Al recargar** (limpieza después de un dry run), TopstepX vuelve al layout
+  guardado del usuario (6EZ26 x3 ese día). No es riesgo para el bot, que
+  escribe y verifica contrato y cantidad antes de cada clic.
+- El prefijo de esta PC pasó a **`FUTVAN7`**: un número por máquina, para sumar más.
 
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 

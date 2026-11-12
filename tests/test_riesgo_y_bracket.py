@@ -350,15 +350,8 @@ class TestConfigRealDeTopstepX(unittest.TestCase):
         pos = self.tsx["posiciones"]
         self.assertTrue(pos["filas"].startswith(pos["panel"] + " "))
 
-    def test_el_bracket_va_en_dolares_y_se_verifica(self):
-        pasos = self.tsx["pasos_orden"]
-        valores = [p.get("valor") for p in pasos if p["accion"] == "escribir"]
-        self.assertIn("{riesgo_usd}", valores)
-        self.assertIn("{ganancia_usd}", valores)
-        verificados = [p.get("igual") for p in pasos if p["accion"] == "verificar"]
-        self.assertIn("{riesgo_usd}", verificados)
-        self.assertIn("{ganancia_usd}", verificados)
-        self.assertTrue(any(p["accion"] == "marcar" for p in pasos))
+    # El SL/TP en dolares ya no va en el dialogo de brackets sino en la fila
+    # de la posicion: ver tests/test_sl_tp_en_fila.py.
 
     def test_la_fila_se_busca_por_la_raiz_con_barra(self):
         self.assertEqual(self.tsx["posiciones"]["texto_fila"], "/{simbolo}")

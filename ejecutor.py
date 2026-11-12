@@ -131,10 +131,14 @@ class ResultadoOrden:
     detalle: str = ""
     omitida: bool = False       # no se intento: aborto o cuenta bloqueada
     error: str | None = None    # fallo antes de poder confirmar nada
+    # La orden SALIO pero no se pudo confirmar su SL/TP (pasos_despues): hay
+    # una posicion abierta que el operador tiene que proteger a mano.
+    sin_proteccion: str | None = None
 
     @property
     def bloquea_la_cuenta(self) -> bool:
-        return self.confirmado is False or self.error is not None
+        return (self.confirmado is False or self.error is not None
+                or self.sin_proteccion is not None)
 
 
 class EjecutorBase:
@@ -193,7 +197,9 @@ class EjecutorBase:
 
             if resultado.bloquea_la_cuenta:
                 motivo = (f"la orden #{i} " +
-                          ("fallo" if resultado.error else "no se confirmo"))
+                          ("fallo" if resultado.error
+                           else "quedo sin SL/TP confirmado" if resultado.sin_proteccion
+                           else "no se confirmo"))
                 bloqueadas[alias] = motivo
                 log.error(f"Cuenta {alias} bloqueada por el resto del lote: {motivo}.")
             resultados.append(resultado)
