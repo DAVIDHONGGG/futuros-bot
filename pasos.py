@@ -21,6 +21,9 @@ Cada plataforma dice COMO capturar una orden con una lista de pasos:
     {"accion": "marcar",      "selector": "<checkbox>"}
                               (lo deja MARCADO; un click lo desmarcaria si ya lo estaba)
     {"accion": "verificar",   "selector": "<selector>", "contiene": "+{contratos} MARKET"}
+    {"accion": "click_si_aparece", "selector": "<boton de un dialogo>", "ms": 500}
+                              (si aparece en ms, clic; si no, sigue. Se busca en la
+                              PAGINA aunque el paso corra dentro de una fila)
     {"accion": "verificar",   "selector": "<input>", "igual": "{riesgo_usd}", "numerico": true}
                               (lee el valor de un input o el texto de otro elemento
                               y CORTA la orden si no coincide: sin clic final)
@@ -50,13 +53,16 @@ Todo lo de aca corre en el hilo del navegador (ver ejecutor_web.py). Antes de
 CADA paso se revisa el aborto: un "stop" a mitad de la captura corta ahi.
 """
 
+import logging
 import re
 
 from config import es_sin_configurar
 from ejecutor import chequear_aborto
 
+log = logging.getLogger("bot_futuros.pasos")
+
 ACCIONES = {"click", "doble_click", "escribir", "click_texto", "tecla", "esperar",
-            "repetir", "marcar", "verificar"}
+            "repetir", "marcar", "verificar", "click_si_aparece"}
 
 MARCADORES = {"simbolo", "contrato", "contratos", "sl_ticks", "tp_ticks", "accion",
               "cuenta_plataforma", "cuenta_ultimos4", "contratos_menos_1",
@@ -106,6 +112,7 @@ def _problemas_de_pasos(nombre: str, pasos) -> list:
             "repetir": ["selector", "veces"],
             "marcar": ["selector"],
             "verificar": ["selector"],
+            "click_si_aparece": ["selector"],
         }[accion]
         if accion == "verificar" and ("igual" in paso) == ("contiene" in paso):
             problemas.append(f"{donde}: verificar necesita 'igual' o 'contiene' (uno solo)")
@@ -324,6 +331,17 @@ def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: st
             base.locator(paso["selector"]).check(timeout=timeout_ms)
         elif accion == "verificar":
             verificar(base, paso, valores, timeout_ms, donde)
+        elif accion == "click_si_aparece":
+            # Un dialogo que a veces sale y a veces no: se busca en la PAGINA
+            # (los dialogos no estan dentro de la fila) y si no aparece en
+            # "ms" se sigue sin hacer nada.
+            aviso = page.locator(paso["selector"]).first
+            try:
+                aviso.wait_for(state="visible", timeout=int(paso.get("ms", 500)))
+            except Exception:
+                continue
+            log.warning(f"{donde}: aparecio {paso['selector']}; se hace clic")
+            aviso.click(timeout=timeout_ms)
         else:   # validar_plataforma ya lo impide; por las dudas
             raise ValueError(f"{donde}: accion desconocida")
 

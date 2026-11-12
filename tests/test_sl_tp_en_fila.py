@@ -184,6 +184,35 @@ class TestProteccionEnElEjecutor(unittest.TestCase):
         self.assertTrue(self.pw.acciones("doble_click"))
 
 
+class TestClickSiAparece(unittest.TestCase):
+    """El dialogo "Switch Chart Symbol" de TopstepX: a veces sale y a veces no."""
+
+    def setUp(self):
+        self.pw = PlaywrightFalso()
+        self.pw.chromium.launch_persistent_context()
+        self.page = self.pw.pagina()
+        self.raiz = self.page.locator("#filas").filter(has_text="/MNQ")
+        self.addCleanup(ejecutor.limpiar_aborto)
+
+    def correr(self):
+        ejecutar_pasos(self.page, [{"accion": "click_si_aparece", "selector": "#cancel",
+                                    "ms": 50}], {}, 100, "SL/TP", raiz=self.raiz)
+
+    def test_si_aparece_hace_clic_en_la_PAGINA_no_en_la_fila(self):
+        self.correr()
+        self.assertEqual(self.pw.clics(), ["#cancel"])
+
+    def test_si_no_aparece_sigue_sin_error(self):
+        self.page.ocultos.add("#cancel")
+        self.correr()
+        self.assertEqual(self.pw.clics(), [])
+
+    def test_valida(self):
+        p = copy.deepcopy(FLOTA_PRUEBA["plataformas"]["tradovate"])
+        p["pasos_despues"] = [{"accion": "click_si_aparece"}]
+        self.assertIn("falta 'selector'", " | ".join(validar_plataforma("x", p)))
+
+
 class TestMensajeDeTelegram(unittest.TestCase):
 
     def test_sin_proteccion_se_grita(self):
@@ -225,10 +254,40 @@ class TestConfigRealDeTopstepX(unittest.TestCase):
         enter = [p for p in pasos if p["accion"] == "tecla"]
         self.assertEqual([p["tecla"] for p in enter], ["Enter", "Enter"])
 
+    def test_ningun_clic_simple_en_la_fila(self):
+        # Medido el 12/11/2026: un clic SIMPLE en la fila abre "Switch Chart
+        # Symbol" y tapa la celda (asi quedo la primera orden real sin TP).
+        # "teclear" hace clic en el input: tampoco.
+        for paso in self.tsx["pasos_despues"]:
+            with self.subTest(paso=paso):
+                self.assertNotIn(paso["accion"], ("click", "click_texto", "repetir", "marcar"))
+                self.assertFalse(paso.get("teclear"))
+
+    def test_el_dialogo_se_cancela_antes_de_cada_Enter_y_de_verificar(self):
+        pasos = self.tsx["pasos_despues"]
+        cancelar = [p for p in pasos if p["accion"] == "click_si_aparece"]
+        self.assertTrue(cancelar)
+        for p in cancelar:
+            self.assertIn("Switch Chart Symbol", p["selector"])
+            self.assertIn("CANCEL", p["selector"])
+            self.assertNotIn("SWITCH')", p["selector"])
+        for i, p in enumerate(pasos):
+            if p["accion"] == "tecla" and p["tecla"] == "Enter":
+                self.assertEqual(pasos[i - 1]["accion"], "click_si_aparece", i)
+        primer_verificar = next(i for i, p in enumerate(pasos) if p["accion"] == "verificar")
+        self.assertIn("click_si_aparece",
+                      [p["accion"] for p in pasos[primer_verificar - 2:primer_verificar]])
+
     def test_pasos_despues_no_tocan_botones_peligrosos(self):
         peligrosos = ("dom-click-button", "close", "flatten", "reverse", "cancel")
         for paso in self.tsx["pasos_despues"]:
             with self.subTest(paso=paso):
+                if paso["accion"] == "click_si_aparece":
+                    # Su CANCEL es el del dialogo del grafico, no "Cancel all"
+                    # ni "Cancel orders": tiene que estar acotado a ese dialogo.
+                    self.assertTrue(paso["selector"].startswith(
+                        "[role='dialog']:has-text('Switch Chart Symbol') "))
+                    continue
                 self.assertFalse(any(x in paso.get("selector", "").lower() for x in peligrosos))
 
 

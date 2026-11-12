@@ -13,6 +13,7 @@ pasa en el hilo del navegador, y deja simular lo que hace falta:
     pagina.falla_en = {"#cantidad"}         esos selectores levantan error
     pagina.falla_al_clic = {"#comprar"}     se ve, pero el clic falla
     pagina.textos = {"#boton": "BUY +2"}    lo que lee un paso "verificar"
+    pagina.ocultos = {"#dialogo"}           nunca aparece (wait_for falla)
 
 Los locators relativos (la fila de una posicion, en pasos_despues) se
 registran con el selector compuesto, para poder ver que todo quedo DENTRO de
@@ -104,6 +105,8 @@ class LocatorFalso:
     def wait_for(self, state="visible", timeout=None):
         self._chequear()
         self.pagina._reg("esperar", self.selector)
+        if self.selector in self.pagina.ocultos:
+            raise ErrorFalso(f"{self.selector} no aparece")
         if self.pagina.sin_sesion and self.selector == self.pagina.selector_sesion:
             raise ErrorFalso("no aparece: sesion no iniciada")
         if self.pagina.sin_panel and self.selector == self.pagina.selector_panel:
@@ -153,6 +156,7 @@ class PaginaFalsa:
         self.falla_en = set()
         self.falla_al_clic = set()
         self.textos = {}           # selector -> lo que lee "verificar"
+        self.ocultos = set()       # selectores que nunca aparecen (wait_for falla)
         self.selector_sesion = "#ticket"
         self.selector_panel = "#posiciones"
         self.capturas = []

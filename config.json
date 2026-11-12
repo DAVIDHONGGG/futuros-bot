@@ -150,6 +150,7 @@
       "_pasos_confirmar": "Opcional: si despues del clic aparece un dialogo de confirmacion. El stop se revisa antes de cada paso: ese es el clic final de verdad. Medido con una orden real el 12/11/2026: TopstepX NO pide confirmacion.",
       "pasos_confirmar": [],
       "_pasos_despues": "SL/TP en la FILA de la posicion, como lo hace el operador: doble clic en el lapiz de Risk, escribir los dolares, Enter; lo mismo en To Make; y releer la fila. Los selectores son RELATIVOS a esa fila (ver pasos.py). Corren solo despues de confirmar la posicion, nunca en dry_run. Si fallan o si ya habia posicion en ese contrato, alerta 'POSICION ABIERTA SIN SL/TP' y no se toca nada mas. Medido con una orden real (long 1 M6E en TOP1, 12/11/2026, version 2.4.36.2): celda [data-field=risk|toMake] con un svg[data-icon=pencil]; doble clic -> la celda pasa a MuiDataGrid-cell--editing con un input[type=number] vacio; Enter confirma y la celda muestra '$5.00'. Dolares por TODA la posicion: To Make $5 puso el TP 4 ticks arriba (4 x 1.25).",
+      "_pasos_despues_dialogo": "NUNCA un clic SIMPLE en la fila: abre el dialogo 'Switch Chart Symbol' (CANCEL/SWITCH) y tapa la celda. Medido el 12/11/2026: la primera orden real del bot quedo con SL y sin TP por eso ('escribir' con teclear hace clic en el input). Medido headless: un clic en el lapiz, en el simbolo o en la cantidad lo abre siempre; el doble clic en el lapiz NO. fill() escribe en el input enfocado sin clic, y sin dialogo. Por las dudas, antes de cada Enter y de verificar, click_si_aparece cancela el dialogo (CANCEL con este selector lo cerro 3 de 3).",
       "pasos_despues": [
         {
           "accion": "doble_click",
@@ -158,8 +159,12 @@
         {
           "accion": "escribir",
           "selector": "[data-field='risk'] input",
-          "valor": "{riesgo_usd}",
-          "teclear": true
+          "valor": "{riesgo_usd}"
+        },
+        {
+          "accion": "click_si_aparece",
+          "selector": "[role='dialog']:has-text('Switch Chart Symbol') button:has-text('CANCEL')",
+          "ms": 400
         },
         {
           "accion": "tecla",
@@ -173,8 +178,12 @@
         {
           "accion": "escribir",
           "selector": "[data-field='toMake'] input",
-          "valor": "{ganancia_usd}",
-          "teclear": true
+          "valor": "{ganancia_usd}"
+        },
+        {
+          "accion": "click_si_aparece",
+          "selector": "[role='dialog']:has-text('Switch Chart Symbol') button:has-text('CANCEL')",
+          "ms": 400
         },
         {
           "accion": "tecla",
@@ -184,6 +193,11 @@
         {
           "accion": "esperar",
           "ms": 1000
+        },
+        {
+          "accion": "click_si_aparece",
+          "selector": "[role='dialog']:has-text('Switch Chart Symbol') button:has-text('CANCEL')",
+          "ms": 400
         },
         {
           "accion": "verificar",

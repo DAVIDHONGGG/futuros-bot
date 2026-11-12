@@ -209,6 +209,20 @@ TopstepX se actualizó ese día (versión 2.4.36.2):
   - La cuenta queda bloqueada por el resto del lote.
   - Nunca cierra nada solo.
 - **TopstepX no pide confirmación después de BUY** (orden del usuario).
+- **Segunda orden real del bot (14:26): entró y puso el SL, pero no el TP.**
+  Mientras se editaba To Make apareció el diálogo **"Switch Chart Symbol"**
+  (CANCEL/SWITCH, "Don't show me again") y tapó la celda. El bot avisó
+  "POSICION ABIERTA SIN SL/TP" y no cerró nada; el usuario cargó el TP a mano.
+  - **Qué lo dispara (medido headless con la posición abierta, sin Enter):**
+    un **clic simple** en cualquier parte de la fila (lápiz, símbolo,
+    cantidad), 3 de 3. El doble clic en el lápiz no lo dispara.
+  - El culpable era `escribir` con `teclear`, que hace clic en el input.
+  - **Arreglo:** en `pasos_despues`, `escribir` sin `teclear`. `fill()`
+    escribe en el input ya enfocado sin dialogo (medido: valor '5' y foco en
+    el input).
+  - **Por las dudas:** acción nueva `click_si_aparece` (busca en la
+    página, espera `ms` y si no aparece sigue). Se usa con el CANCEL del
+    diálogo antes de cada Enter y antes de verificar. Ese selector lo cerró 3 de 3.
 - **Primera orden real del bot: se cortó antes de BUY** y no se colocó nada.
   Si el ticket ya tiene el contrato, TopstepX **no filtra** el autocompletado
   (muestra los 51), y el clic en "la opción" chocó con el modo estricto. El
