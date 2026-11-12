@@ -213,7 +213,10 @@ TopstepX se actualizó ese día (versión 2.4.36.2):
   posición real. La primera orden real del bot es la prueba.
 - **Edge recuerda la posición de la ventana** en el perfil: después de que el bot
   la abre fuera de pantalla, `abrir_perfil.py` la abre en (-32000, -32000) y
-  el operador no la ve. Hubo que moverla con SetWindowPos. Arreglo pendiente.
+  el operador no la ve. Hubo que moverla con SetWindowPos. Arreglado:
+  `abrir_perfil` fuerza `--window-position=0,0` y `--window-size` al tamaño
+  de la pantalla. Medido con un perfil descartable: sin los args quedaba en
+  (-1570, 0), con 30 px a la vista; con los args, en (0, 0).
 - **Al recargar** (limpieza después de un dry run), TopstepX vuelve al layout
   guardado del usuario (6EZ26 x3 ese día). No es riesgo para el bot, que
   escribe y verifica contrato y cantidad antes de cada clic.

@@ -7,6 +7,7 @@ import io
 import json
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests.apoyo import FLOTA_PRUEBA, config_de_prueba, trabajo
 from tests.navegador_falso import PlaywrightFalso, fabrica
@@ -154,10 +155,27 @@ class TestAbrirPerfil(unittest.TestCase):
         opciones = pw.acciones("lanzar")[0][3]
         self.assertEqual(opciones["user_data_dir"], str(cfg.cuentas["TV1"].perfil))
         self.assertFalse(opciones["headless"])
-        self.assertFalse(any("window-position" in a for a in opciones["args"]))
+        # A la vista: NUNCA la posicion fuera de pantalla del bot, y forzada
+        # a (0, 0) porque el perfil recuerda la del bot (12/11/2026).
+        self.assertNotIn("--window-position=-32000,-32000", opciones["args"])
+        self.assertIn("--window-position=0,0", opciones["args"])
         self.assertEqual(pw.acciones("goto")[0][3], "https://tradovate.prueba/trader")
         self.assertTrue(pw.acciones("esperar_evento"))
         self.assertTrue(pw.detenido)
+
+
+class TestVentanaDelLogin(unittest.TestCase):
+
+    def test_se_ajusta_a_la_pantalla(self):
+        self.assertEqual(abrir_perfil.args_ventana_a_la_vista((1920, 1080)),
+                         ["--window-position=0,0", "--window-size=1600,1000"])
+        self.assertEqual(abrir_perfil.args_ventana_a_la_vista((1366, 768)),
+                         ["--window-position=0,0", "--window-size=1366,728"])
+
+    def test_sin_saber_la_pantalla_usa_un_tamano_seguro(self):
+        with mock.patch.object(abrir_perfil, "_tamano_de_pantalla", return_value=None):
+            args = abrir_perfil.args_ventana_a_la_vista()
+        self.assertEqual(args, ["--window-position=0,0", "--window-size=1280,720"])
 
 
 class TestNavegadorEnConfig(unittest.TestCase):

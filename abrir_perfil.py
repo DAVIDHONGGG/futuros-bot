@@ -24,6 +24,37 @@ from ejecutor_web import ARGS_SIN_FRENOS
 
 SCRIPT_LISTENER = "listener_futuros.py"
 
+# Tamano de la ventana del login: el de la pantalla, sin pasarse de esto.
+ANCHO_MAXIMO, ALTO_MAXIMO = 1600, 1000
+TAMANO_SI_NO_SE_SABE = (1280, 760)
+
+
+def _tamano_de_pantalla():
+    """(ancho, alto) de la pantalla principal segun Windows, o None."""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        ancho, alto = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+        return (ancho, alto) if ancho > 0 and alto > 0 else None
+    except Exception:          # no es Windows, o sin escritorio
+        return None
+
+
+def args_ventana_a_la_vista(pantalla=None) -> list:
+    """Fuerza la ventana DENTRO de la pantalla.
+
+    Hace falta porque Edge/Chromium guarda en el perfil donde estaba la
+    ventana, y el bot la abre en (-32000, -32000). Medido el 12/11/2026 con
+    un perfil descartable: despues de una corrida del bot, abrir sin estos
+    args la dejaba en (-1570, 0)-(30, 1000), con 30 px a la vista, y el
+    operador no podia hacer el login. Con --window-position/--window-size
+    queda en (0, 0).
+    """
+    ancho, alto = pantalla or _tamano_de_pantalla() or TAMANO_SI_NO_SE_SABE
+    # 40 px menos de alto: la barra de tareas.
+    ancho, alto = min(ancho, ANCHO_MAXIMO), min(alto - 40, ALTO_MAXIMO)
+    return ["--window-position=0,0", f"--window-size={ancho},{max(alto, 400)}"]
+
 
 def listener_corriendo() -> bool:
     """True si hay un python.exe corriendo listener_futuros.py."""
@@ -68,7 +99,8 @@ def main(argv=None, config=None, fabrica=None, corriendo=None) -> int:
         url = None
 
     opciones = {"user_data_dir": str(cuenta.perfil), "headless": False,
-                "args": list(ARGS_SIN_FRENOS), "no_viewport": True}
+                "args": list(ARGS_SIN_FRENOS) + args_ventana_a_la_vista(),
+                "no_viewport": True}
     if config.navegador["canal"]:
         opciones["channel"] = config.navegador["canal"]
     cuenta.perfil.mkdir(parents=True, exist_ok=True)
