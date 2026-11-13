@@ -90,9 +90,11 @@ Todo lleva nombres propios a propósito:
   temporal del `.bat` es `botfuturos-fecha.txt`.
 - `no_robar_foco` (default true): la ventana del navegador se abre **fuera de
   la pantalla** y nunca se trae al frente. Una ventana encima le tapa las
-  plantillas de píxeles a MT5 y se lleva sus teclas. **Falta medirlo** en una
-  máquina real: que no aparezca, que no robe el foco y que la plataforma siga
-  actualizando.
+  plantillas de píxeles a MT5 y se lleva sus teclas. Medido en FUTVAN7
+  (12/11/2026): fuera de pantalla y sin robar el foco. Igual, en FUTVAN7 el
+  usuario eligió **ventana visible** (`"no_robar_foco": false` en el
+  `config.local.json`), para poder ver la orden y cerrar a mano si algo falla.
+  Es clave local: se decide por máquina.
 
 ## Lecciones heredadas de MT5 que aplican acá
 
@@ -130,8 +132,10 @@ Todo lleva nombres propios a propósito:
 ## Estado (11/11/2026)
 
 - **Etapa 1** (listener, parser, ejecutor falso) y **Etapa 2** (ejecutor web,
-  solo colocar órdenes): hechas. 276 tests en verde (12/11/2026: tope de
+  solo colocar órdenes): hechas. 286 tests en verde (12/11/2026: tope de
   riesgo y SL/TP en dólares en la fila de la posición).
+- **En vivo en TopstepX** desde el 12/11/2026 (PC FUTVAN7): orden real con
+  SL/TP en la fila, verificada de punta a punta. Ver "PC FUTVAN, 12/11/2026".
 - `telegram_allowed_user_id` en `config.json`: los mismos tres ids de Telegram
   que la flota de MT5 (lo confirmó el usuario).
 - **El bot va a correr en otra PC**, no en la de desarrollo. Ahí hay que
@@ -231,8 +235,17 @@ TopstepX se actualizó ese día (versión 2.4.36.2):
   (`click_texto` acepta `selector` para acotar). Medido: 1 sola coincidencia
   con el mismo contrato, con otro y de vuelta, y los pasos reales corrieron
   4 veces seguidas sin BUY.
-- **Falta en vivo:** los `pasos_despues` del bot todavía no corrieron con una
-  posición real. La primera orden real del bot es la prueba.
+- **Tercera orden real del bot (14:45, `M6E buy 1 4 4 TOP2`): OK de punta a
+  punta.** Con el arreglo anterior (89d834e) y la ventana visible:
+  - mensaje 14:45:32, clic en BUY 14:45:40, posición `[] -> ['1']` 14:45:41;
+  - "SL/TP puestos y verificados en la fila" (riesgo 5 / ganancia 5 USD) a
+    las 14:45:43: 2,6 s para las dos celdas, releídas después del Enter;
+  - el diálogo "Switch Chart Symbol" **no apareció** (`click_si_aparece`
+    no dejó su WARNING): el arreglo de fondo es escribir sin clic, y el
+    CANCEL queda de red;
+  - sin capturas de error.
+  Con esto la Etapa 4 quedó probada en TopstepX: Telegram -> orden -> SL/TP
+  en la fila. `dry_run` lo maneja el usuario.
 - **Edge recuerda la posición de la ventana** en el perfil: después de que el bot
   la abre fuera de pantalla, `abrir_perfil.py` la abre en (-32000, -32000) y
   el operador no la ve. Hubo que moverla con SetWindowPos. Arreglado:
@@ -271,10 +284,11 @@ TopstepX se actualizó ese día (versión 2.4.36.2):
 2. **Etapa 3**: cierres (cuenta por defecto, una cuenta o todas), multi-cuenta,
    latido con datos del navegador, `check_setup.py` completo (Playwright,
    Chromium, config, perfiles).
-3. **Etapa 4**: este archivo completo e `INSTALAR-MAQUINA-NUEVA.md`, con las
-   verificaciones en orden: tests, check_setup, valor efectivo de la config,
-   dry run con prefijo propio, que ignore prefijo ajeno y orden sin prefijo, y
-   recién ahí una orden real mínima.
+3. **Etapa 4**: ~~orden real mínima~~ hecha en TopstepX (12/11/2026, ver
+   "PC FUTVAN"). Falta `INSTALAR-MAQUINA-NUEVA.md`, con las verificaciones
+   en orden: tests, check_setup, valor efectivo de la config, dry run con
+   prefijo propio, que ignore prefijo ajeno y orden sin prefijo, y recién ahí
+   una orden real mínima.
 4. **Selectores** de las dos plataformas, sacados con codegen en la PC donde
    corre el bot.
 
