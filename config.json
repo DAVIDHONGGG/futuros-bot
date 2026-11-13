@@ -29,59 +29,226 @@
   "_plataformas": "Una entrada por terminal web. Lo que dice TODO no esta configurado y el bot se NIEGA a operar en esa plataforma (no adivina selectores). Los selectores son de Playwright: CSS, text=..., role=button[name=\"...\"]. Se sacan con: python -m playwright codegen --user-data-dir perfiles\\ALIAS <url>. 'simbolos' traduce la raiz de Telegram al contrato de ESA plataforma y cambia en cada vencimiento: revisala en cada roll.",
   "plataformas": {
     "tradovate": {
-      "url": "TODO: url del trader web de Tradovate",
+      "url": "https://trader.tradovate.com/",
+      "_medido": "Todo MEDIDO en la PC FUTVAN5 el 13/11/2026 (trader.tradovate.com, workspace web 'Dark Default', Edge por Playwright), sin un clic del bot en Send: la orden se midio con 2 ordenes reales minimas que puso el operador (Buy 1 M6EZ6 MKT a las 13:54 sin bracket y a las 13:59 con bracket). WORKSPACE: Order Ticket y Positions tienen que verse A LA VEZ (son pestanas del mismo panel por defecto): el operador movio Positions a su propio panel (abajo al centro) y dejo Order Ticket en el panel derecho. La app de ESCRITORIO no sirve: es Electron y Playwright 1.64 no se conecta (connect_over_cdp: 'Browser context management is not supported', medido).",
       "_simbolos": "Tradovate escribe el anio con UN digito (M6EZ6, MNQZ6, NQZ6: vistos en la plataforma el 11/11/2026). Ultimo dia de los Z6: MNQ/MES 18/12/2026, M6E 14/12/2026; el volumen pasa a H7 unos dias antes: actualizar la tabla en el roll.",
       "simbolos": {
         "MNQ": "MNQZ6",
         "MES": "MESZ6",
         "M6E": "M6EZ6"
       },
-      "_sesion_iniciada": "Selector de algo que SOLO se ve con la sesion iniciada (por ejemplo el boton de comprar del ticket). Si no aparece, el bot no opera y pide hacer el login a mano con abrir_perfil.py.",
-      "sesion_iniciada": "TODO: selector visible solo con la sesion iniciada en Tradovate",
-      "_pasos_seleccionar_cuenta": "Opcional: si un mismo login tiene varias cuentas, los pasos para elegir la de la orden. {cuenta_plataforma} sale de la cuenta en config.local.json. Lista vacia = no hace falta.",
-      "pasos_seleccionar_cuenta": [],
-      "_pasos_orden": "Pasos para dejar el ticket listo, SIN el clic de Comprar/Vender. Acciones: click, escribir, click_texto, tecla, esperar, repetir, marcar, verificar (detalle en pasos.py). Marcadores: {contrato} {contratos} {contratos_menos_1} {sl_ticks} {tp_ticks} {riesgo_usd} {ganancia_usd} {accion} {simbolo} {cuenta_plataforma} {cuenta_ultimos4}. Fijarse en la web en que unidad van SL y TP (ticks, puntos o dolares) y usar el marcador que corresponda.",
+      "_sesion_iniciada": "El bloque EQUITY / OPEN P/L de arriba: 1 visible en el layout, 0 en /welcome y 0 en /trading-mode (medido). La sesion web se PIERDE al cerrar el navegador (2 de 2; recargar la pagina la conserva y convive con la app de escritorio abierta): por eso 'login'.",
+      "sesion_iniciada": "[data-testid='balance-view-panel']",
+      "_login": "AUTOLOGIN sin manejar contrasenas: el operador cargo usuario y contrasena A MANO en edge://settings/passwords del Edge del perfil (Edge no ofrece guardarla solo: no detecta el login de Tradovate como formulario, aunque 'Ofrecer guardar' este activado). Medido: Edge abierto por Playwright marca los dos campos como :autofill en ~4 s y el clic en Login (unico en /welcome) entra directo, sin captcha. Despues sale /trading-mode con 'Start Simulated Trading' (simulation-button, unico). En ESA pantalla esta 'Purchase' (market-replay-button: compra Market Replay): NUNCA tocarlo. El bot nunca escribe en los campos del login (pasos.py lo impide).",
+      "login": {
+        "campos_autorrelleno": [
+          "#name-input",
+          "#password-input"
+        ],
+        "boton": "role=button[name='Login']",
+        "pasos_al_entrar": [
+          {
+            "accion": "esperar",
+            "selector": "[data-testid='simulation-button']"
+          },
+          {
+            "accion": "click",
+            "selector": "[data-testid='simulation-button']"
+          }
+        ]
+      },
+      "_pasos_seleccionar_cuenta": "Un solo login con UNA cuenta (MFFUSFBLDR700298009, 'Demo & Active'). NO se abre el menu de cuentas: en el mismo menu estan 'Go to Replay' y 'Logout'. Solo se verifica que el desplegable (unico, medido) muestre la cuenta de la orden; si no, no se opera. Con varias cuentas habra que medir el cambio: la opcion es [data-testid='account-item-<cuenta>'].",
+      "pasos_seleccionar_cuenta": [
+        {
+          "accion": "verificar",
+          "selector": "[class*='account'][class*='dropdown']",
+          "contiene": "{cuenta_plataforma}"
+        }
+      ],
+      "_pasos_orden": "En la pestana 'Order Ticket' (todo data-testid, unico y visible, medido 13:29 con Positions a la vista). Despues de cada orden el panel muestra el HISTORIAL de esa orden; la flecha vuelve al formulario. Al escribir M6EZ6 hay 1 sugerencia ('M6EZ6 E-Micro Euro'). Cambiar el simbolo VACIA la cantidad: contrato primero. Cantidad: combo con 1, 2, 3, 4, 5, 10, 15, 20 (texto exacto). Tipo: MARKET (estaba en LIMIT). RELEASE en Off: asi salieron las ordenes del operador. SL/TP: el BRACKET del ticket, en TICKS (el formato de Telegram): queda activado entre ordenes; se exige TP y SL marcados (clase checkbox-active del label: el input tapado no refleja el estado), se escriben con teclear (como el operador, para que React tome el valor) y se releen. NO tocar 'Add take profit / stop loss' ni Presets. Send es el MISMO boton para comprar y vender: el lado se verifica al final, justo antes del clic. Reset (pasos_limpiar) vacia contrato y cantidad (medido en el dry run).",
       "pasos_orden": [
         {
           "accion": "click",
-          "selector": "TODO: campo del simbolo"
+          "selector": "text=Order Ticket"
+        },
+        {
+          "accion": "click_si_aparece",
+          "selector": "[data-testid='trading-ticket-header'] [class*='icon-back']",
+          "ms": 500
+        },
+        {
+          "_por_que": "Tradovate RESTAURA el ultimo ticket al entrar (medido 14:40: M6EZ6, 1, Sell, MARKET) y si el campo ya tiene el contrato, escribirlo de nuevo NO despliega la sugerencia (primer dry run por Telegram, 14:39: timeout esperando la lista). Se vacia con su x antes de escribir: desde vacio la sugerencia salio 3 de 3.",
+          "accion": "click_si_aparece",
+          "selector": "[data-testid='order-ticket-main-entry'] [data-testid='typeahead-clear']",
+          "ms": 500
         },
         {
           "accion": "escribir",
-          "selector": "TODO: campo del simbolo",
-          "valor": "{contrato}"
+          "selector": "[data-testid='order-ticket-symbol-search']",
+          "valor": "{contrato}",
+          "teclear": true
+        },
+        {
+          "_por_que": "Por TEXTO dentro de la lista, no 'el li': con el campo vacio la lista muestra 'Popular Instruments' (encabezado + 9 contratos) y filtra un instante despues de teclear (14:41: el clic en 'el li' choco con el modo estricto, 10 elementos, y no se hizo). NO exacto: la sugerencia es li > a > div con el texto 'M6EZ6' suelto y un div hijo 'E-Micro Euro' (medido en el DOM 14:43), asi que ningun elemento dice EXACTAMENTE el contrato. Si hubiera 2 coincidencias, el modo estricto no hace clic; y el paso siguiente verifica el campo.",
+          "accion": "click_texto",
+          "texto": "{contrato}",
+          "exacto": false,
+          "selector": "[data-testid='order-ticket-main-entry'] [data-testid='typeahead-wrapper'] ul.dropdown-menu"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='order-ticket-symbol-search']",
+          "igual": "{contrato}"
         },
         {
           "accion": "click_texto",
-          "texto": "{contrato}"
+          "texto": "{lado}",
+          "selector": "[data-testid='order-ticket-action-switch']"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='order-ticket-action-switch'] [class*='active']",
+          "igual": "{lado}"
+        },
+        {
+          "_por_que": "El clic al centro cae en el input y NO abre la lista (dry run 13/11 14:19: la opcion quedo oculta). Abre el boton de la flecha: div.btn con div.caret (medido en el DOM).",
+          "accion": "click",
+          "selector": "[data-testid='order-ticket-quantity'] .btn"
+        },
+        {
+          "accion": "click_texto",
+          "texto": "{contratos}",
+          "selector": "[data-testid='order-ticket-quantity']"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='order-ticket-quantity'] input",
+          "igual": "{contratos}"
+        },
+        {
+          "accion": "click",
+          "selector": "[data-testid='order-ticket-order-type-select']"
+        },
+        {
+          "accion": "click",
+          "selector": "[data-testid='order-ticket-order-type-select'] li:has-text('MARKET')"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='order-ticket-order-type-select']",
+          "igual": "MARKET"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='order-ticket-release-switch'] [class*='active']",
+          "igual": "Off"
+        },
+        {
+          "accion": "click_si_aparece",
+          "selector": "[data-testid='simple-tpsl-order-ticket-enable-tpsl-button']",
+          "ms": 500
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='simple-tpsl-show-in-units-select']",
+          "igual": "Ticks"
+        },
+        {
+          "_por_que": "NO 'marcar': la casilla dibujada (label) tapa al input, y el input dice desmarcado aunque se vea marcada (dry run 13/11 14:22: check() quiso hacer clic y el clic fue interceptado; la captura muestra el tilde). El estado real es la clase checkbox-active del label (medido 14:02). Quedan marcadas entre ordenes: se EXIGE que lo esten; si no, no se envia nada.",
+          "accion": "esperar",
+          "selector": "[data-testid='simple-tpsl-bracket-0-take-profit-checkbox-label'][class*='checkbox-active']"
         },
         {
           "accion": "escribir",
-          "selector": "TODO: campo de cantidad",
-          "valor": "{contratos}"
+          "selector": "[data-testid='simple-tpsl-bracket-0-take-profit-input'] input",
+          "valor": "{tp_ticks}",
+          "teclear": true
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='simple-tpsl-bracket-0-take-profit-input'] input",
+          "igual": "{tp_ticks}",
+          "numerico": true
+        },
+        {
+          "accion": "esperar",
+          "selector": "[data-testid='simple-tpsl-bracket-0-stop-loss-checkbox-label'][class*='checkbox-active']"
         },
         {
           "accion": "escribir",
-          "selector": "TODO: campo de stop loss en ticks",
-          "valor": "{sl_ticks}"
+          "selector": "[data-testid='simple-tpsl-bracket-0-stop-loss-input'] input",
+          "valor": "{sl_ticks}",
+          "teclear": true
         },
         {
-          "accion": "escribir",
-          "selector": "TODO: campo de take profit en ticks",
-          "valor": "{tp_ticks}"
+          "accion": "verificar",
+          "selector": "[data-testid='simple-tpsl-bracket-0-stop-loss-input'] input",
+          "igual": "{sl_ticks}",
+          "numerico": true
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='simple-tpsl-bracket-0-stop-loss-type-select']",
+          "igual": "Stop"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='order-ticket-action-switch'] [class*='active']",
+          "igual": "{lado}"
         }
       ],
-      "boton_comprar": "TODO: selector del boton Comprar/Buy del ticket",
-      "boton_vender": "TODO: selector del boton Vender/Sell del ticket",
-      "_pasos_confirmar": "Opcional: si despues del clic aparece un dialogo de confirmacion. El stop se revisa antes de cada paso: ese es el clic final de verdad.",
+      "boton_comprar": "[data-testid='order-ticket-send-button']",
+      "boton_vender": "[data-testid='order-ticket-send-button']",
+      "_pasos_confirmar": "Las 2 ordenes del operador (13:54 y 13:59) pasaron de Send al historial 'Filled' sin dialogo de confirmacion a la vista. Si apareciera uno, la orden no saldria y el bot avisaria 'no confirmada' (la posicion no cambia).",
       "pasos_confirmar": [],
-      "_pasos_limpiar": "Opcional: como vaciar el ticket tras un dry_run o un error. Vacio = recargar la pagina.",
-      "pasos_limpiar": [],
-      "_posiciones": "Para verificar la orden: panel = el panel de posiciones; filas = cada fila (dentro del panel); cantidad = la celda de cantidad DENTRO de una fila. Se compara la cantidad, no la fila entera (el P&L cambia solo).",
+      "_verificar_despues": "SOLO LECTURA, despues de confirmar la posicion: el historial del ticket tiene que decir '<Lado> N <contrato> MKT - Filled' y las DOS ordenes del bracket del lado opuesto 'STP at <precio> - Working' (SL) y 'LMT at <precio> - Working' (TP). Medido en la orden del operador: fill 1.1037, LMT 1.1041 y STP 1.1033 con 4/4 ticks. Es lo GUARDADO en el servidor, no lo escrito en el ticket. Si falta algo: 'POSICION ABIERTA SIN SL/TP', alerta y cuenta bloqueada; nunca se cierra nada solo. Sin verificar todavia: que el PRECIO de cada una este a SL/TP ticks del fill.",
+      "verificar_despues": [
+        {
+          "accion": "esperar",
+          "selector": "[data-testid='trading-ticket-header'] >> text=/STP at .* - Working/"
+        },
+        {
+          "accion": "esperar",
+          "selector": "[data-testid='trading-ticket-header'] >> text=/LMT at .* - Working/"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='trading-ticket-header']",
+          "contiene": "{lado} {contratos} {contrato} MKT - Filled"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='trading-ticket-header'] >> text=/STP at .* - Working/",
+          "contiene": "{lado_opuesto} {contratos} {contrato} STP at"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='trading-ticket-header'] >> text=/LMT at .* - Working/",
+          "contiene": "{lado_opuesto} {contratos} {contrato} LMT at"
+        }
+      ],
+      "_pasos_limpiar": "Tras un dry run o un error: Escape (cierra un combo abierto), volver del historial si estaba, y 'Reset' del ticket (unico, medido). En vez de recargar la pagina.",
+      "pasos_limpiar": [
+        {
+          "accion": "tecla",
+          "tecla": "Escape"
+        },
+        {
+          "accion": "click_si_aparece",
+          "selector": "[data-testid='trading-ticket-header'] [class*='icon-back']",
+          "ms": 500
+        },
+        {
+          "accion": "click",
+          "selector": "[data-testid='order-ticket-reset-button']"
+        }
+      ],
+      "_posiciones": "Panel Positions (medido): tabla role=grid con columnas SYMBOL, NET POS, BOUGHT, SOLD, NET PRICE, OPEN P/L, INIT. MARGIN. La fila del contrato dice 'M6EZ6' (contrato completo, con 'Long'/'Short' al lado) y QUEDA con NET POS 0 cuando no hay posicion: leer_posiciones no cuenta las cantidades 0. Orden real del operador: '0' -> '1' en 1 s.",
       "posiciones": {
-        "panel": "TODO: selector del panel de posiciones",
-        "filas": "TODO: selector de cada fila de posicion",
-        "cantidad": "TODO: selector de la celda de cantidad dentro de la fila"
+        "panel": "[role=grid]:has([role=columnheader]:has-text('NET POS'))",
+        "filas": "[role=grid]:has([role=columnheader]:has-text('NET POS')) [role=row]:has([role=gridcell])",
+        "cantidad": "[role=gridcell] >> nth=1",
+        "texto_fila": "{contrato}"
       }
     },
     "topstepx": {

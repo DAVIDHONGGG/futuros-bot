@@ -64,8 +64,8 @@ Otros comandos útiles:
 | `listener_futuros.py` | Telegram: prefijo por línea, stop, programadas, update, avisos y latido |
 | `ordenes.py` | Formato de orden y cierre, validación contra la config |
 | `ejecutor.py` | Candado, aborto cooperativo, reglas del lote y marcas `INICIO/FIN OPERACION` |
-| `ejecutor_web.py` | Playwright en un único hilo dueño del navegador |
-| `pasos.py` | Validación de plataformas e intérprete de pasos |
+| `ejecutor_web.py` | Playwright en un único hilo dueño del navegador; autologin |
+| `pasos.py` | Validación de plataformas e intérprete de pasos (`login`, `verificar_despues`) |
 | `ejecutor_falso.py` | Solo registra en el log (lo usan los tests) |
 | `config.py` | Precedencia `FUTBOT_*` > `config.local.json` > `config.json` > defaults |
 | `avisos.py` | Errores y latido al grupo aparte (copiado de MT5) |
@@ -126,8 +126,14 @@ Todo lleva nombres propios a propósito:
   entera (el P&L cambia solo).
 - Orden no confirmada o con error → esa cuenta queda **bloqueada solo por el
   resto del lote** (decisión del usuario). Nunca se reintenta un clic.
-- El bot nunca maneja contraseñas: el login se hace a mano en el perfil de
-  cada cuenta.
+- El bot nunca **escribe ni lee** una contraseña. Por defecto el login se hace
+  a mano en el perfil de cada cuenta (`abrir_perfil.py`). Con `login` en la
+  plataforma (Tradovate, decisión del usuario del 13/11/2026) hay
+  **autologin**: el operador cargó usuario y contraseña a mano en
+  `edge://settings/passwords` del Edge del perfil, Edge los autocompleta, y el
+  bot solo hace clic en Login si **todos** los campos están marcados como
+  autocompletados (`:autofill`, se lee un booleano). Si falta uno, no hace
+  clic. `pasos.py` no deja escribir ni teclear en los pasos del login.
 
 ## Estado (11/11/2026)
 
@@ -136,6 +142,9 @@ Todo lleva nombres propios a propósito:
   riesgo y SL/TP en dólares en la fila de la posición).
 - **En vivo en TopstepX** desde el 12/11/2026 (PC FUTVAN7): orden real con
   SL/TP en la fila, verificada de punta a punta. Ver "PC FUTVAN, 12/11/2026".
+- **Tradovate medido completo** el 13/11/2026 en la PC FUTVAN5 (ver "PC
+  FUTVAN5"): selectores, autologin, bracket del ticket. 318 tests en verde.
+  Falta el dry run real y la primera orden del bot.
 - `telegram_allowed_user_id` en `config.json`: los mismos tres ids de Telegram
   que la flota de MT5 (lo confirmó el usuario).
 - **El bot va a correr en otra PC**, no en la de desarrollo. Ahí hay que
@@ -257,7 +266,101 @@ TopstepX se actualizó ese día (versión 2.4.36.2):
   escribe y verifica contrato y cantidad antes de cada clic.
 - El prefijo de esta PC pasó a **`FUTVAN7`**: un número por máquina, para sumar más.
 
+### PC FUTVAN5: Tradovate medido (13/11/2026)
+
+Mini PC con el bot de MT5 corriendo al lado (pyautogui y plantillas de
+píxeles en 1920x1080). Opera **solo Tradovate**: prefijo `FUTVAN5`, bot
+@FUTVAN5_bot, cuenta `TRA1` = `MFFUSFBLDR700298009` (un solo login, una
+cuenta, "Demo & Active"), `max_riesgo_usd: 800`, ventana **visible**.
+Python313 es el mismo del bot de MT5: Playwright se instaló después de un
+`pip install --dry-run` que mostró que solo **agregaba** paquetes.
+
+- **La app de escritorio no sirve.** Es Electron 27 (Chromium 118) y carga la
+  interfaz desde archivos locales (`app.asar`), no desde la web. Playwright
+  para Python no tiene API de Electron, y `connect_over_cdp` falla: "Browser
+  context management is not supported" (medido con una segunda instancia,
+  sin login). Se usa `https://trader.tradovate.com/` en Edge.
+- **La sesión web se pierde al cerrar el navegador** (2 de 2). Recargar la
+  página la conserva, y convive con la app de escritorio abierta con el
+  mismo login. Con el navegador abierto aguantó al menos 14 minutos sin
+  cortes (medición corta). Por eso el autologin; `abrir_perfil.py` no sirve
+  para Tradovate (hace login y cierra).
+- **Autologin:** Edge **no ofrece** guardar la contraseña ("Ofrecer guardar"
+  activado y aun así nada: no detecta el formulario). Cargada a mano en
+  `edge://settings/passwords`, Edge abierto por Playwright marca
+  `#name-input` y `#password-input` como `:autofill` en ~4 s, y el clic en
+  Login entra directo, **sin captcha**. Después viene `/trading-mode`:
+  "Start Simulated Trading" (`simulation-button`). **Al lado está
+  "Purchase" (`market-replay-button`), que compra Market Replay.** En el
+  menú de cuentas están "Go to Replay" y "Logout". Los tests prohíben
+  todos esos selectores.
+- **Workspace:** "Order Ticket" y "Positions" son pestañas del **mismo
+  panel**, así que no se ven a la vez. El operador movió Positions a su
+  propio panel. Si queda activa la pestaña "Orders", el ticket desaparece
+  del DOM: el primer paso hace clic en `text=Order Ticket`.
+- **Positions deja la fila del contrato con NET POS 0** sin posición. El bot
+  la tomaba como "ya había posición" y nunca habría puesto el SL/TP.
+  Arreglado: `leer_posiciones` no cuenta cantidades 0.
+- **SL/TP = bracket del ticket**, no la fila (el usuario había dicho "fila";
+  lo medido manda). "Enable Bracket Orders" queda activado entre órdenes,
+  en **ticks**, que es justo el formato de Telegram. Sale con la entrada,
+  así que nunca hay posición sin protección. Después de Send el panel
+  muestra el **historial** de la orden: "Buy 1 M6EZ6 MKT - Filled - 1/1" y
+  las dos órdenes del bracket "Sell … STP at 1.1033 - Working" / "LMT at
+  1.1041 - Working". Eso es lo guardado, y lo relee `verificar_despues`
+  (acción nueva, solo lectura). Medido con 2 órdenes reales del operador,
+  fill 1.1037 y 4/4 ticks.
+- **Send es el mismo botón para comprar y vender**: el lado se elige en un
+  switch Buy/Sell (marcadores nuevos `{lado}` y `{lado_opuesto}`) y se
+  verifica justo antes del clic. **Cambiar el símbolo vacía la cantidad**:
+  primero el contrato, después la cantidad.
+- **En esta PC la ventana del bot SÍ toma el foco** al abrirse, aun con
+  `ARGS_NO_ROBAR_FOCO` (2 de 2). En FUTVAN7 se había medido lo contrario.
+  Pasa una vez por apertura del navegador.
+- **Dry run local (13/11/2026, 14:18–14:24).** Corre con el ejecutor real y
+  sin Telegram (`parse_orden` → `expandir_lote` → `colocar_lote`):
+  - El autologin funcionó 5 de 5, en 6–8 s.
+  - Dos ajustes salieron del dry run, medidos en el DOM sin clic:
+    - **El combo de cantidad se abre con su flecha** (`div.btn`): el clic al
+      centro cae en el input y la lista no se abre.
+    - **Las casillas TP/SL no se pueden "marcar"**: el input está tapado por
+      la casilla dibujada y dice desmarcado aunque se vea el tilde. Se
+      **exige** la clase `checkbox-active` del label.
+  - `M6E buy 1 4 4` y `M6E sell 1 6 8` llenaron el ticket entero y se
+    detuvieron antes de Send.
+  - En la venta, el ticket calculó TP 8 ticks abajo (1.1031) y SL 6 arriba
+    (1.1045) con el último en 1.1039: **la plataforma toma lo que escribe
+    el bot**.
+  - Reset vacía contrato y cantidad.
+  - La fila con NET POS 0 se leyó como "ninguna".
+- **Dry run por Telegram (13/11/2026, 14:34–14:51).** Las pruebas se
+  hicieron en un **chat privado** con @FUTVAN5_bot, no en el grupo: ahí
+  escuchan FUTVAN7, que opera en vivo, y el bot de MT5. Para el prefijo
+  ajeno se usó `FUTVAN99`, que no existe; nunca el de otra máquina.
+  - El primer intento se cortó antes de Send. **Tradovate restaura el último
+    ticket al entrar** (M6EZ6, 1, Sell, MARKET), y escribir el mismo contrato
+    no despliega la sugerencia.
+  - Arreglo, medido en el DOM:
+    - vaciar el campo con su "×" (`typeahead-clear`);
+    - con el campo vacío aparece "Popular Instruments" (encabezado y 9
+      contratos), así que el clic en "el li" chocó con el modo estricto;
+    - la sugerencia es `li > a > div`, con "M6EZ6" suelto y un div hijo
+      "E-Micro Euro": ningún elemento dice exactamente el contrato. Se elige
+      con `click_texto` **no exacto** dentro de `ul.dropdown-menu` y después
+      se verifica el campo.
+  - Con eso, `FUTVAN5 M6E buy 1 4 4 TRA1` tardó 17 s del mensaje al ticket
+    completo, autologin incluido, y se detuvo antes de Send.
+  - `FUTVAN99 …` y la misma línea sin prefijo quedaron "ignorado".
+- Sin medir todavía:
+  - que el **precio** del STP/LMT guardado esté a SL/TP ticks del fill
+    (después de Send se verifica que existan y estén "Working", no la
+    distancia);
+  - el cambio entre varias cuentas;
+  - cuánto dura la sesión con el navegador abierto por horas.
+
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
+
+(Lo de Tradovate de esta sección quedó superado por "PC FUTVAN5" de arriba.)
 
 - **TopstepX** (`https://topstepx.com/trade`): contratos con el año en **dos
   dígitos** (`M6EZ26`). Selector de cuenta arriba a la izquierda ("50K DLL

@@ -13,7 +13,9 @@ pasa en el hilo del navegador, y deja simular lo que hace falta:
     pagina.falla_en = {"#cantidad"}         esos selectores levantan error
     pagina.falla_al_clic = {"#comprar"}     se ve, pero el clic falla
     pagina.textos = {"#boton": "BUY +2"}    lo que lee un paso "verificar"
-    pagina.ocultos = {"#dialogo"}           nunca aparece (wait_for falla)
+                                            (y evaluate: True = autocompletado)
+    pagina.ocultos = {"#dialogo"}           nunca aparece (wait_for falla,
+                                            is_visible da False)
 
 Los locators relativos (la fila de una posicion, en pasos_despues) se
 registran con el selector compuesto, para poder ver que todo quedo DENTRO de
@@ -101,6 +103,18 @@ class LocatorFalso:
         self._chequear()
         self.pagina._reg("leer", self.selector)
         return self.pagina.textos.get(self.selector, "")
+
+    def is_visible(self, timeout=None):
+        """Sin esperar. Mismas reglas que wait_for (ocultos, sin_sesion,
+        sin_panel); falla_en tambien cuenta como "no se ve"."""
+        self.pagina._reg("visible", self.selector)
+        if self.selector in self.pagina.falla_en or self.selector in self.pagina.ocultos:
+            return False
+        if self.pagina.sin_sesion and self.selector == self.pagina.selector_sesion:
+            return False
+        if self.pagina.sin_panel and self.selector == self.pagina.selector_panel:
+            return False
+        return True
 
     def wait_for(self, state="visible", timeout=None):
         self._chequear()

@@ -36,6 +36,8 @@ SELECTORES no llevan marcadores: lo variable va en "valor", "texto", "veces",
 
 Marcadores:
     {simbolo} {contrato} {contratos} {sl_ticks} {tp_ticks} {accion}
+    {lado} {lado_opuesto} "Buy"/"Sell" con mayuscula, como los muestra el
+                          ticket de Tradovate ({accion} es "buy"/"sell")
     {cuenta_plataforma}   el nombre de la cuenta en la web (config.local.json)
     {cuenta_ultimos4}     sus ultimos 4 caracteres (TopstepX muestra "(...2304)")
     {contratos_menos_1}   para "repetir" el + despues de elegir 1
@@ -48,6 +50,24 @@ posicion del contrato (posiciones.filas que contenga texto_fila): asi
 "[data-field='risk'] input" no puede tocar otra fila. Es donde TopstepX carga
 el SL/TP: Risk y To Make se editan en la fila de la posicion (medido con una
 orden real el 12/11/2026).
+
+verificar_despues: la alternativa de SOLO LECTURA, para plataformas donde el
+SL/TP sale JUNTO con la entrada (el bracket del ticket de Tradovate, medido
+con una orden real el 13/11/2026). Corren sobre la PAGINA despues de
+confirmar la posicion, y solo admiten "verificar" y "esperar": releen lo que
+quedo GUARDADO (las ordenes del bracket "Working"), no tocan nada. Si fallan,
+la orden queda "SIN SL/TP" igual que con pasos_despues.
+
+login (opcional): como recuperar la sesion SIN que el bot maneje la
+contrasena. El navegador del perfil la autocompleta (la cargo el operador a
+mano, una vez); el bot solo hace clic en el boton si TODOS los
+campos_autorrelleno estan marcados por el navegador como autocompletados, y
+nunca escribe en ellos. Despues corre pasos_al_entrar (por ejemplo, elegir
+el modo de simulacion) y espera sesion_iniciada:
+
+    "login": {"campos_autorrelleno": ["#usuario", "#clave"],
+              "boton": "role=button[name='Login']",
+              "pasos_al_entrar": [{"accion": "click", "selector": "#simulacion"}]}
 
 Todo lo de aca corre en el hilo del navegador (ver ejecutor_web.py). Antes de
 CADA paso se revisa el aborto: un "stop" a mitad de la captura corta ahi.
@@ -65,6 +85,7 @@ ACCIONES = {"click", "doble_click", "escribir", "click_texto", "tecla", "esperar
             "repetir", "marcar", "verificar", "click_si_aparece"}
 
 MARCADORES = {"simbolo", "contrato", "contratos", "sl_ticks", "tp_ticks", "accion",
+              "lado", "lado_opuesto",
               "cuenta_plataforma", "cuenta_ultimos4", "contratos_menos_1",
               "riesgo_usd", "ganancia_usd"}
 _PATRON_MARCADOR = re.compile(r"\{([a-z0-9_]+)\}")
@@ -84,8 +105,38 @@ class VerificacionFallida(Exception):
 # Listas de pasos que puede tener una plataforma. Las obligatorias tienen que
 # estar y no vacias.
 LISTAS_DE_PASOS = ("pasos_orden", "pasos_seleccionar_cuenta", "pasos_confirmar",
-                   "pasos_limpiar", "pasos_despues")
+                   "pasos_limpiar", "pasos_despues", "verificar_despues")
 OBLIGATORIAS = ("url", "sesion_iniciada", "boton_comprar", "boton_vender")
+
+# verificar_despues solo relee: con la posicion abierta no se toca nada.
+ACCIONES_SOLO_LECTURA = {"verificar", "esperar"}
+# En el login nunca se escribe (la contrasena la pone el navegador) ni se
+# teclea: solo clics en botones medidos, esperas y verificaciones.
+ACCIONES_DEL_LOGIN = {"click", "esperar", "verificar", "click_si_aparece"}
+
+
+def _problemas_de_login(login) -> list:
+    if not isinstance(login, dict):
+        return ["'login' tiene que ser un objeto"]
+    problemas = []
+    campos = login.get("campos_autorrelleno")
+    if not isinstance(campos, list) or not campos:
+        problemas.append("'login.campos_autorrelleno' tiene que ser una lista no vacia "
+                         "(sin eso no hay forma de saber que la contrasena la puso el navegador)")
+    else:
+        for campo in campos:
+            if es_sin_configurar(campo):
+                problemas.append(f"'login.campos_autorrelleno' tiene un campo sin configurar ({campo!r})")
+    if es_sin_configurar(login.get("boton")):
+        problemas.append("'login.boton' sin configurar")
+    pasos = login.get("pasos_al_entrar", [])
+    problemas.extend(_problemas_de_pasos("login.pasos_al_entrar", pasos))
+    if isinstance(pasos, list):
+        for n, paso in enumerate(pasos, start=1):
+            if isinstance(paso, dict) and paso.get("accion") not in ACCIONES_DEL_LOGIN:
+                problemas.append(f"login.pasos_al_entrar paso {n}: accion {paso.get('accion')!r} "
+                                 f"no permitida en el login (solo {', '.join(sorted(ACCIONES_DEL_LOGIN))})")
+    return problemas
 
 
 def _problemas_de_pasos(nombre: str, pasos) -> list:
@@ -151,6 +202,17 @@ def validar_plataforma(nombre: str, datos: dict) -> list:
     for lista in LISTAS_DE_PASOS:
         if lista in datos:
             problemas.extend(_problemas_de_pasos(lista, datos[lista]))
+    if isinstance(datos.get("verificar_despues"), list):
+        for n, paso in enumerate(datos["verificar_despues"], start=1):
+            if isinstance(paso, dict) and paso.get("accion") not in ACCIONES_SOLO_LECTURA:
+                problemas.append(f"verificar_despues paso {n}: accion {paso.get('accion')!r} "
+                                 f"no permitida (solo verificar y esperar: con la posicion "
+                                 f"abierta no se toca nada)")
+    if datos.get("verificar_despues") and datos.get("pasos_despues"):
+        problemas.append("'pasos_despues' y 'verificar_despues' a la vez: el SL/TP va en la "
+                         "fila (pasos_despues) O en el ticket (verificar_despues), no en los dos")
+    if "login" in datos:
+        problemas.extend(_problemas_de_login(datos["login"]))
     posiciones = datos.get("posiciones")
     if not isinstance(posiciones, dict):
         problemas.append("'posiciones' sin configurar (hace falta para verificar la orden)")
@@ -178,6 +240,8 @@ def valores_de(trabajo: dict, cuenta) -> dict:
         "sl_ticks": str(trabajo["sl_ticks"]),
         "tp_ticks": str(trabajo["tp_ticks"]),
         "accion": trabajo["accion"],
+        "lado": "Buy" if trabajo["accion"] == "buy" else "Sell",
+        "lado_opuesto": "Sell" if trabajo["accion"] == "buy" else "Buy",
         "cuenta_plataforma": cuenta_plataforma,
         "cuenta_ultimos4": cuenta_plataforma[-4:] if cuenta_plataforma else None,
         "riesgo_usd": trabajo.get("riesgo_usd"),
@@ -372,6 +436,11 @@ def leer_posiciones(page, conf: dict, buscado: str, timeout_ms: int) -> tuple:
     Se compara la CANTIDAD y no la fila entera: la fila trae el P&L, que
     cambia solo con el precio y daria una confirmacion falsa.
 
+    Una fila con cantidad 0 NO es una posicion y no se cuenta. Medido en
+    Tradovate (13/11/2026): el panel deja la fila del contrato con NET POS 0
+    aunque no haya posicion. Contarla haria que cada orden creyera que "ya
+    habia posicion" (y no se pondria el SL/TP en la fila).
+
     Levanta excepcion si el panel no esta a la vista: sin poder leerlo no hay
     forma de verificar, y quien llama decide que hacer (no hacer clic).
     """
@@ -381,6 +450,8 @@ def leer_posiciones(page, conf: dict, buscado: str, timeout_ms: int) -> tuple:
     for fila in page.locator(conf["filas"]).all():
         texto = fila.inner_text(timeout=timeout_ms)
         if buscado in texto.upper():
-            cantidad = fila.locator(conf["cantidad"]).first.inner_text(timeout=timeout_ms)
-            cantidades.append(cantidad.strip())
+            cantidad = fila.locator(conf["cantidad"]).first.inner_text(timeout=timeout_ms).strip()
+            if _numero(cantidad) == 0:
+                continue
+            cantidades.append(cantidad)
     return tuple(sorted(cantidades))

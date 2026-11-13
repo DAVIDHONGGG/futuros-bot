@@ -14,8 +14,12 @@ turno en la cola, y el "stop" no baja la bandera de aborto antes de tiempo.
 
 FLUJO DE UNA ORDEN (en el hilo del navegador):
   1. pagina de la cuenta (perfil persistente propio; se abre la primera vez
-     y se reusa). Sin sesion iniciada -> error: el login lo hace el operador
-     a mano con abrir_perfil.py; este bot nunca maneja contrasenas.
+     y se reusa). Sin sesion iniciada:
+       - si la plataforma tiene "login" (Tradovate): AUTOLOGIN. Solo si el
+         navegador AUTOCOMPLETO todos los campos (la contrasena la cargo el
+         operador a mano en el perfil), clic en el boton y pasos_al_entrar.
+         El bot nunca escribe ni lee una contrasena;
+       - si no: error, y el login lo hace el operador con abrir_perfil.py.
   2. pasos_seleccionar_cuenta (si la plataforma los tiene).
   3. leer el panel de posiciones ANTES. Si no se puede leer, NO se hace clic:
      sin eso no hay forma de verificar despues.
@@ -30,10 +34,14 @@ FLUJO DE UNA ORDEN (en el hilo del navegador):
   8. verificar leyendo el panel: la CANTIDAD de la fila del contrato tiene
      que cambiar. Si no cambia en segundos_verificacion -> no confirmado, y
      EjecutorBase no coloca nada mas en esa cuenta en este lote.
-  9. pasos_despues (si la plataforma los tiene), sobre la FILA de la
-     posicion: en TopstepX es donde se cargan Risk y To Make. Sin mirar el
-     aborto. Si fallan, o si ya habia posicion en ese contrato (el SL/TP de
-     la fila es de toda la posicion), la orden queda "SIN SL/TP": alerta al
+  9. proteccion, una de dos:
+     - pasos_despues, sobre la FILA de la posicion: en TopstepX es donde se
+       cargan Risk y To Make. Si ya habia posicion en ese contrato (el SL/TP
+       de la fila es de toda la posicion) no se toca;
+     - verificar_despues, SOLO LECTURA sobre la pagina: en Tradovate el
+       SL/TP sale con la entrada (bracket del ticket) y aca se relee que sus
+       ordenes quedaron "Working".
+     Sin mirar el aborto. Si fallan, la orden queda "SIN SL/TP": alerta al
      grupo de errores y la cuenta se bloquea por el resto del lote. Nunca se
      cierra nada solo.
 
@@ -64,6 +72,17 @@ BASE_DIR = Path(__file__).parent
 DIR_DIAGNOSTICOS = BASE_DIR / "logs" / "diagnosticos"
 MAXIMO_CAPTURAS = 300
 PAUSA_VERIFICACION_MS = 250
+PAUSA_SESION_MS = 250
+
+# True solo si el navegador marco el campo como AUTOCOMPLETADO y tiene algo.
+# Devuelve un booleano: el valor (la contrasena) nunca sale de la pagina.
+JS_AUTORRELLENADO = """e => {
+  let auto = false;
+  for (const p of [':autofill', ':-webkit-autofill']) {
+    try { if (e.matches(p)) { auto = true; break; } } catch (x) {}
+  }
+  return auto && typeof e.value === 'string' && e.value.length > 0;
+}"""
 
 # Que Chromium no frene una pagina que no se ve: sin esto, con la ventana
 # tapada o fuera de pantalla, la plataforma podria dejar de actualizar.
@@ -77,6 +96,22 @@ ARGS_NO_ROBAR_FOCO = [
     "--window-position=-32000,-32000",
     "--window-size=1600,1000",
 ]
+
+
+def _visible(locator) -> bool:
+    """Si se ve AHORA, sin esperar. Cualquier error (pagina navegando, mas de
+    una coincidencia) cuenta como que no."""
+    try:
+        return bool(locator.first.is_visible())
+    except Exception:
+        return False
+
+
+def _autorrellenado(page, selector: str, timeout_ms: int) -> bool:
+    try:
+        return page.locator(selector).evaluate(JS_AUTORRELLENADO, timeout=timeout_ms) is True
+    except Exception:
+        return False
 
 
 def _fabrica_real():
@@ -228,6 +263,9 @@ class EjecutorWeb(EjecutorBase):
                 if plataforma.get("pasos_despues"):
                     log.info("DRY_RUN: el SL/TP (pasos_despues) se carga en la fila de la "
                              "posicion y sin posicion no se puede probar.")
+                if plataforma.get("verificar_despues"):
+                    log.info("DRY_RUN: el SL/TP va en el ticket (ya lleno y verificado); que "
+                             "quede guardado (verificar_despues) solo se ve despues de enviar.")
                 self._limpiar(page, plataforma, valores)
                 return ResultadoOrden(
                     etiqueta, alias, confirmado=None,
@@ -279,10 +317,17 @@ class EjecutorWeb(EjecutorBase):
                                   detalle=f"la posicion no cambio (sigue {list(antes)})")
         log.info(f"Orden confirmada ({etiqueta}): posicion {list(antes)} -> {list(despues)}")
         detalle = f"posicion {list(antes)} -> {list(despues)}"
-        if not plataforma.get("pasos_despues"):
+        if plataforma.get("verificar_despues"):
+            sin_proteccion = self._verificar_proteccion(page, plataforma, valores, alias)
+            ok = (f"SL/TP del bracket verificados en la plataforma ({etiqueta}): SL "
+                  f"{trabajo['sl_ticks']} / TP {trabajo['tp_ticks']} ticks")
+        elif plataforma.get("pasos_despues"):
+            sin_proteccion = self._proteger(page, plataforma, trabajo, valores, antes, alias)
+            ok = (f"SL/TP puestos y verificados en la fila ({etiqueta}): riesgo "
+                  f"{trabajo.get('riesgo_usd')} / ganancia {trabajo.get('ganancia_usd')} USD")
+        else:
             return ResultadoOrden(etiqueta, alias, confirmado=True, detalle=detalle)
 
-        sin_proteccion = self._proteger(page, plataforma, trabajo, valores, antes, alias)
         if sin_proteccion:
             self._ultimo_error = f"{alias}: SIN SL/TP: {sin_proteccion}"[:200]
             captura = self._capturar(page, alias, "sin-sl-tp")
@@ -290,10 +335,25 @@ class EjecutorWeb(EjecutorBase):
                       f"{sin_proteccion}. PONELO A MANO YA. Captura: {captura}")
             return ResultadoOrden(etiqueta, alias, confirmado=True, detalle=detalle,
                                   sin_proteccion=sin_proteccion)
-        log.info(f"SL/TP puestos y verificados en la fila ({etiqueta}): riesgo "
-                 f"{trabajo.get('riesgo_usd')} / ganancia {trabajo.get('ganancia_usd')} USD")
+        log.info(ok)
         return ResultadoOrden(etiqueta, alias, confirmado=True,
                               detalle=f"{detalle}; SL/TP puestos")
+
+    def _verificar_proteccion(self, page, plataforma, valores, alias):
+        """Relee en la PAGINA que el SL/TP que salio con la entrada quedo
+        guardado (Tradovate: las dos ordenes del bracket "Working" en el
+        ticket). Solo lectura: verificar_despues no admite otra cosa (ver
+        pasos.validar_plataforma). Devuelve None si esta todo, o el motivo.
+
+        Nunca levanta y no mira el aborto: la posicion ya esta abierta.
+        """
+        try:
+            ejecutar_pasos(page, plataforma["verificar_despues"], valores,
+                           self.opciones["timeout_ms"], "verificar SL/TP", con_aborto=False)
+        except Exception as e:
+            log.warning(f"No se pudo verificar el SL/TP en {alias}", exc_info=True)
+            return str(e).splitlines()[0][:300] or type(e).__name__
+        return None
 
     def _proteger(self, page, plataforma, trabajo, valores, antes, alias):
         """Corre pasos_despues sobre la fila de la posicion (SL/TP en TopstepX).
@@ -379,16 +439,75 @@ class EjecutorWeb(EjecutorBase):
         if not page.url or page.url == "about:blank":
             page.goto(plataforma["url"], timeout=self.opciones["carga_ms"],
                       wait_until="domcontentloaded")
+        # Hasta carga_ms: o aparece la sesion, o (con "login") el boton de
+        # login. Se mira cada PAUSA_SESION_MS en vez de esperar la sesion
+        # entera: sin sesion, la orden no tiene que perder carga_ms.
+        sesion = page.locator(plataforma["sesion_iniciada"])
+        login = plataforma.get("login")
+        limite = time.monotonic() + self.opciones["carga_ms"] / 1000
+        while True:
+            if _visible(sesion):
+                return page
+            if login and _visible(page.locator(login["boton"])):
+                self._autologin(page, cuenta, plataforma)
+                return page
+            if time.monotonic() >= limite:
+                break
+            page.wait_for_timeout(PAUSA_SESION_MS)
+        self._capturar(page, cuenta.alias, "sin-sesion")
+        if login:
+            raise RuntimeError(
+                f"la sesion de {cuenta.alias} en {cuenta.plataforma} no esta iniciada y "
+                f"no aparecio el login (o la pagina no cargo). Mira la captura de "
+                f"logs/diagnosticos/")
+        raise RuntimeError(
+            f"la sesion de {cuenta.alias} en {cuenta.plataforma} no esta iniciada "
+            f"(o la pagina no cargo). Hace el login a mano: parar el listener y "
+            f"correr  python abrir_perfil.py {cuenta.alias}")
+
+    def _autologin(self, page, cuenta, plataforma):
+        """Recupera la sesion con lo que AUTOCOMPLETO el navegador.
+
+        El bot nunca escribe ni lee una contrasena: la cargo el operador a mano
+        en el gestor de contrasenas de ese perfil. Aca solo se mira (con un
+        booleano) que TODOS los campos esten marcados como autocompletados; si
+        falta uno, no se hace clic en nada. Medido en Tradovate (13/11/2026):
+        Edge, abierto por Playwright, rellena usuario y contrasena en ~4 s y
+        el clic en Login entra directo, sin captcha.
+        """
+        login = plataforma["login"]
+        to = self.opciones["timeout_ms"]
+        alias = cuenta.alias
+        log.warning(f"{alias}: sin sesion en {cuenta.plataforma}; autologin con lo que "
+                    f"autocompleto el navegador.")
+        limite = time.monotonic() + to / 1000
+        while True:
+            faltan = [c for c in login["campos_autorrelleno"] if not _autorrellenado(page, c, to)]
+            if not faltan or time.monotonic() >= limite:
+                break
+            page.wait_for_timeout(PAUSA_SESION_MS)
+        if faltan:
+            self._capturar(page, alias, "login-sin-autorrelleno")
+            raise RuntimeError(
+                f"autologin de {alias}: el navegador no autocompleto {', '.join(faltan)}; "
+                f"no se hizo clic. El bot nunca escribe contrasenas: cargala a mano en el "
+                f"gestor de contrasenas de ese perfil (python abrir_perfil.py {alias}, "
+                f"edge://settings/passwords)")
+        chequear_aborto("antes del clic de login")
         try:
+            page.locator(login["boton"]).click(timeout=to)
+            ejecutar_pasos(page, login.get("pasos_al_entrar", []), {}, to, "login")
             page.locator(plataforma["sesion_iniciada"]).wait_for(
                 state="visible", timeout=self.opciones["carga_ms"])
+        except OperacionAbortada:
+            raise
         except Exception as e:
-            self._capturar(page, cuenta.alias, "sin-sesion")
+            self._capturar(page, alias, "login-fallido")
             raise RuntimeError(
-                f"la sesion de {cuenta.alias} en {cuenta.plataforma} no esta iniciada "
-                f"(o la pagina no cargo). Hace el login a mano: parar el listener y "
-                f"correr  python abrir_perfil.py {cuenta.alias}") from e
-        return page
+                f"autologin de {alias}: se hizo clic en el login pero la sesion no "
+                f"aparecio ({str(e).splitlines()[0][:150]}). Mira la captura de "
+                f"logs/diagnosticos/") from e
+        log.warning(f"{alias}: sesion recuperada con autologin.")
 
     def _limpiar(self, page, plataforma, valores):
         """Deja el ticket vacio para que la orden siguiente no herede valores.

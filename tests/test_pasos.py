@@ -63,13 +63,14 @@ class TestValidarPlataforma(unittest.TestCase):
 
     def test_las_del_config_json_real_tienen_la_forma_correcta(self):
         # Las que tienen TODO pueden tenerlos, pero ningun problema puede ser
-        # de FORMA: cada uno tiene que ser un "sin configurar". TopstepX ya
-        # esta medida completa (11/11/2026): no puede tener ninguno.
+        # de FORMA: cada uno tiene que ser un "sin configurar". TopstepX
+        # (11/11/2026) y Tradovate (13/11/2026, PC FUTVAN5) ya estan medidas
+        # completas: no pueden tener ninguno.
         flota = json.loads((RAIZ / "config.json").read_text(encoding="utf-8"))
         for nombre, datos in flota["plataformas"].items():
             with self.subTest(plataforma=nombre):
                 problemas = validar_plataforma(nombre, datos)
-                if nombre == "topstepx":
+                if nombre in ("topstepx", "tradovate"):
                     self.assertEqual(problemas, [])
                     continue
                 self.assertTrue(problemas, "la plataforma real ya no tiene TODO?")
