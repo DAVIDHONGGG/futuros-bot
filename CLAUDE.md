@@ -145,6 +145,8 @@ Todo lleva nombres propios a propósito:
 - **Tradovate medido completo** el 13/11/2026 en la PC FUTVAN5 (ver "PC
   FUTVAN5"): selectores, autologin, bracket del ticket. 318 tests en verde.
   Falta el dry run real y la primera orden del bot.
+- **TopstepX con autologin "Continue with Google"** desde el 16/11/2026 (PC
+  FUTVAN7, ver "PC FUTVAN7, 16/11/2026"). 331 tests en verde.
 - `telegram_allowed_user_id` en `config.json`: los mismos tres ids de Telegram
   que la flota de MT5 (lo confirmó el usuario).
 - **El bot va a correr en otra PC**, no en la de desarrollo. Ahí hay que
@@ -265,6 +267,34 @@ TopstepX se actualizó ese día (versión 2.4.36.2):
   guardado del usuario (6EZ26 x3 ese día). No es riesgo para el bot, que
   escribe y verifica contrato y cantidad antes de cada clic.
 - El prefijo de esta PC pasó a **`FUTVAN7`**: un número por máquina, para sumar más.
+
+### PC FUTVAN7, 16/11/2026: autologin de TopstepX con Google
+
+TopstepX pasó a la versión 2.4.38.2 y cambió el login: `/trade` sin sesión
+redirige a `login.topstep.com`.
+
+- **Medido con un perfil vacío y descartable**, headless y sin clic. La página
+  tiene el email, "Continue to TopstepX", **"Continue with Google"** y
+  "Continue with Facebook". Los botones no tienen `data-testid` y su `id`
+  cambia en cada carga, por eso el selector va por texto.
+- **El perfil del bot seguía con sesión ese día**: abrió directo en el
+  trading y los selectores que usa el bot seguían iguales. El login nuevo
+  solo afecta cuando la sesión vence.
+- **Se usa el mismo `login` que armó FUTVAN5 para Tradovate**, con
+  `"sin_contrasena": true` y sin `campos_autorrelleno`. En la página no hay
+  contraseña que autocompletar: el bot solo hace clic en el botón de Google y
+  espera `sesion_iniciada`. La validación no deja mezclar `sin_contrasena`
+  con campos, y solo `true` lo activa.
+  - Se hizo así porque las dos PCs armaron un autologin el mismo día.
+  - La primera versión de FUTVAN7, una lista aparte `pasos_login`, se
+    descartó al integrar para no tener dos mecanismos.
+- **Si Google pide algo**, la sesión no aparece. Entonces la orden falla con
+  la captura `login-fallido` y no se toca el ticket.
+- **TODO, sin medir:** qué hace Google con el navegador automatizado. El
+  11/11 bloqueó el login ("This browser or app may not be secure"), y no
+  sabemos si muestra el selector de cuenta. Se mide la primera vez que la
+  sesión venza de verdad: buscar en el log "autologin con el boton" y mirar
+  la captura.
 
 ### PC FUTVAN5: Tradovate medido (13/11/2026)
 

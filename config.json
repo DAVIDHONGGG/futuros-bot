@@ -262,6 +262,11 @@
       },
       "_sesion_iniciada": "Selector de algo que SOLO se ve con la sesion iniciada (por ejemplo el boton de comprar del ticket). Si no aparece, el bot no opera y pide hacer el login a mano con abrir_perfil.py.",
       "sesion_iniciada": "[data-testid='account-selector-input-select-account']",
+      "_login": "Solo si la sesion vencio. Medido el 16/11/2026 (version 2.4.38.2) con un perfil vacio, headless y sin clic: /trade redirige a login.topstep.com, con el email, 'Continue to TopstepX', 'Continue with Google' y 'Continue with Facebook' (botones sin data-testid y con id que cambia en cada carga: por eso el texto). sin_contrasena: el boton es de Google, no hay contrasena en la pagina; con la sesion de Google guardada en el perfil, el clic deberia volver solo a /trade. TODO, sin medir: que hace Google en un navegador automatizado (el 11/11 bloqueo el login con 'This browser or app may not be secure') y si muestra el selector de cuenta. Si pide algo, la sesion no aparece y la orden falla con captura login-fallido: nunca se escribe nada.",
+      "login": {
+        "sin_contrasena": true,
+        "boton": "button:has-text('Continue with Google')"
+      },
       "_pasos_seleccionar_cuenta": "Opcional: si un mismo login tiene varias cuentas, los pasos para elegir la de la orden. {cuenta_plataforma} sale de la cuenta en config.local.json. Lista vacia = no hace falta.",
       "pasos_seleccionar_cuenta": [
         {

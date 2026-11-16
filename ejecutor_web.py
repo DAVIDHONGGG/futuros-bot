@@ -18,7 +18,8 @@ FLUJO DE UNA ORDEN (en el hilo del navegador):
        - si la plataforma tiene "login" (Tradovate): AUTOLOGIN. Solo si el
          navegador AUTOCOMPLETO todos los campos (la contrasena la cargo el
          operador a mano en el perfil), clic en el boton y pasos_al_entrar.
-         El bot nunca escribe ni lee una contrasena;
+         Con "sin_contrasena" (TopstepX, "Continue with Google") no hay
+         campos: solo el clic. El bot nunca escribe ni lee una contrasena;
        - si no: error, y el login lo hace el operador con abrir_perfil.py.
   2. pasos_seleccionar_cuenta (si la plataforma los tiene).
   3. leer el panel de posiciones ANTES. Si no se puede leer, NO se hace clic:
@@ -474,15 +475,26 @@ class EjecutorWeb(EjecutorBase):
         falta uno, no se hace clic en nada. Medido en Tradovate (13/11/2026):
         Edge, abierto por Playwright, rellena usuario y contrasena en ~4 s y
         el clic en Login entra directo, sin captcha.
+
+        Con "sin_contrasena" (el "Continue with Google" de TopstepX) no hay
+        campos que mirar: se hace clic en el boton y la sesion de Google del
+        perfil hace el resto. Si Google pide algo, la sesion no aparece y
+        cae en "login-fallido", igual que el otro caso.
         """
         login = plataforma["login"]
         to = self.opciones["timeout_ms"]
         alias = cuenta.alias
-        log.warning(f"{alias}: sin sesion en {cuenta.plataforma}; autologin con lo que "
-                    f"autocompleto el navegador.")
+        sin_contrasena = login.get("sin_contrasena") is True
+        if sin_contrasena:
+            log.warning(f"{alias}: sin sesion en {cuenta.plataforma}; autologin con el "
+                        f"boton {login['boton']!r} (sin contrasena).")
+        else:
+            log.warning(f"{alias}: sin sesion en {cuenta.plataforma}; autologin con lo que "
+                        f"autocompleto el navegador.")
         limite = time.monotonic() + to / 1000
+        campos = [] if sin_contrasena else login["campos_autorrelleno"]
         while True:
-            faltan = [c for c in login["campos_autorrelleno"] if not _autorrellenado(page, c, to)]
+            faltan = [c for c in campos if not _autorrellenado(page, c, to)]
             if not faltan or time.monotonic() >= limite:
                 break
             page.wait_for_timeout(PAUSA_SESION_MS)

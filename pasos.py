@@ -69,6 +69,12 @@ el modo de simulacion) y espera sesion_iniciada:
               "boton": "role=button[name='Login']",
               "pasos_al_entrar": [{"accion": "click", "selector": "#simulacion"}]}
 
+Con "sin_contrasena": true (y sin campos_autorrelleno) el login es un boton
+de un tercero, como el "Continue with Google" de TopstepX (16/11/2026): en
+la pagina no hay contrasena, y la sesion de Google guardada en el perfil
+hace el resto. Si Google pide algo, la sesion no aparece y la orden falla
+con captura; el bot no escribe nada en ningun caso.
+
 Todo lo de aca corre en el hilo del navegador (ver ejecutor_web.py). Antes de
 CADA paso se revisa el aborto: un "stop" a mitad de la captura corta ahi.
 """
@@ -120,7 +126,13 @@ def _problemas_de_login(login) -> list:
         return ["'login' tiene que ser un objeto"]
     problemas = []
     campos = login.get("campos_autorrelleno")
-    if not isinstance(campos, list) or not campos:
+    if login.get("sin_contrasena") is True:
+        # Boton de un tercero (Google): en la pagina no hay contrasena que
+        # autocompletar. Campos aca seria una contradiccion de config.
+        if campos:
+            problemas.append("'login.sin_contrasena' con 'campos_autorrelleno': o hay "
+                             "contrasena que autocompletar o no, no las dos")
+    elif not isinstance(campos, list) or not campos:
         problemas.append("'login.campos_autorrelleno' tiene que ser una lista no vacia "
                          "(sin eso no hay forma de saber que la contrasena la puso el navegador)")
     else:
