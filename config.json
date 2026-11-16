@@ -306,6 +306,11 @@
       "_sesion_iniciada": "Selector de algo que SOLO se ve con la sesion iniciada (por ejemplo el boton de comprar del ticket). Si no aparece, el bot no opera y pide hacer el login a mano con abrir_perfil.py.",
       "sesion_iniciada": "[data-testid='account-selector-input-select-account']",
       "_login": "Solo si la sesion vencio. Medido el 16/11/2026 (version 2.4.38.2) con un perfil vacio, headless y sin clic: /trade redirige a login.topstep.com, con el email, 'Continue to TopstepX', 'Continue with Google' y 'Continue with Facebook' (botones sin data-testid y con id que cambia en cada carga: por eso el texto). sin_contrasena: el boton es de Google, no hay contrasena en la pagina; con la sesion de Google guardada en el perfil, el clic deberia volver solo a /trade. TODO, sin medir: que hace Google en un navegador automatizado (el 11/11 bloqueo el login con 'This browser or app may not be secure') y si muestra el selector de cuenta. Si pide algo, la sesion no aparece y la orden falla con captura login-fallido: nunca se escribe nada.",
+      "_ritmo": "Pedido del usuario (16/11/2026): que la entrada salga con calma y mas natural, en unos 12 s desde que empieza la orden hasta el clic en BUY (10 a 14 s, al azar en cada orden), en pausas desparejas antes de cada paso. El SL/TP de la fila (pasos_despues) NO espera: con la posicion abierta se pone lo antes posible. Un stop corta durante las pausas. Con varias cuentas en un lote, cada orden lleva su propio ritmo.",
+      "ritmo": {
+        "segundos_hasta_el_clic": 12,
+        "variacion_s": 2
+      },
       "login": {
         "sin_contrasena": true,
         "boton": "button:has-text('Continue with Google')"

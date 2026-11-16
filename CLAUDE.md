@@ -316,6 +316,30 @@ redirige a `login.topstep.com`.
   sesión venza de verdad: buscar en el log "autologin con el boton" y mirar
   la captura.
 
+### Ritmo de la entrada en TopstepX (16/11/2026)
+
+El usuario pidió que la entrada salga **con calma y más natural**: unos 12
+s desde que empieza la orden hasta el clic en BUY. Antes tardaba ~8 s,
+incluyendo abrir el navegador.
+
+- **Clave nueva `ritmo`**, opcional por plataforma:
+  `{"segundos_hasta_el_clic": 12, "variacion_s": 2}`.
+  - Cada orden sortea entre 10 y 14 s.
+  - Ese tiempo se reparte en pausas **desparejas** antes de cada paso (de
+    0,4 a 1,6 veces la parte que le toca a cada uno).
+  - La última pausa, justo antes del clic, completa lo que falte.
+  - Si abrir el navegador ya se comió el tiempo, no espera más.
+- **Solo hasta el clic.** El SL/TP de la fila (`pasos_despues`) no espera:
+  con la posición abierta se pone lo antes posible.
+- **Un stop corta durante las pausas**: espera en tramos de 100 ms
+  (`esperar_con_aborto`).
+- **Corre también en dry run**: así se ve el ritmo sin colocar nada.
+- **En un lote, cada orden lleva su propio ritmo.** Con `all` y 5 cuentas,
+  el lote tarda ~1 minuto.
+- **Validación:** entre 0 y 60 s, y la variación tiene que ser menor que el
+  total.
+- **Tradovate no tiene ritmo**: sus pausas son pasos `esperar` medidos.
+
 ### PC FUTVAN5: Tradovate medido (13/11/2026)
 
 Mini PC con el bot de MT5 corriendo al lado (pyautogui y plantillas de

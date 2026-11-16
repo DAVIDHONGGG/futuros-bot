@@ -57,6 +57,7 @@ siga actualizando y que la ventana no aparezca.
 
 import logging
 import queue
+import random
 import threading
 import time
 from concurrent.futures import Future
@@ -64,8 +65,8 @@ from datetime import datetime
 from pathlib import Path
 
 from ejecutor import EjecutorBase, OperacionAbortada, ResultadoOrden, chequear_aborto, operacion
-from pasos import (ejecutar_pasos, fila_de, leer_posiciones, texto_de_fila,
-                   validar_plataforma, valores_de)
+from pasos import (ejecutar_pasos, esperar_con_aborto, fila_de, leer_posiciones,
+                   texto_de_fila, validar_plataforma, valores_de)
 
 log = logging.getLogger("bot_futuros.ejecutor_web")
 
@@ -97,6 +98,43 @@ ARGS_NO_ROBAR_FOCO = [
     "--window-position=-32000,-32000",
     "--window-size=1600,1000",
 ]
+
+
+class Ritmo:
+    """Que la orden no salga de golpe: "ritmo" de la plataforma
+    ({"segundos_hasta_el_clic": 12, "variacion_s": 2}, pedido del usuario el
+    16/11/2026 para TopstepX).
+
+    Desde que empieza la orden hasta el clic en Comprar/Vender pasan
+    segundos_hasta_el_clic +- variacion_s (al azar en cada orden), repartidos
+    en pausas DESPAREJAS antes de cada paso; la ultima pausa, justo antes del
+    clic, completa lo que falte. Si abrir el navegador ya se comio el tiempo,
+    no se espera nada mas.
+
+    Solo hasta el clic: con la posicion abierta (SL/TP) no se espera nunca.
+    Todas las pausas miran el aborto: un stop no tiene que esperar el ritmo.
+    """
+
+    def __init__(self, page, conf: dict, inicio: float, pausas: int, azar=random):
+        segundos = float(conf["segundos_hasta_el_clic"])
+        variacion = float(conf.get("variacion_s", 0))
+        self.page, self.azar = page, azar
+        self.limite = inicio + azar.uniform(segundos - variacion, segundos + variacion)
+        self.quedan = max(1, int(pausas))   # incluye la del clic
+
+    def antes_de_un_paso(self, donde: str):
+        restante = self.limite - time.monotonic()
+        if restante <= 0 or self.quedan <= 1:
+            return
+        parte = min(restante, restante / self.quedan * self.azar.uniform(0.4, 1.6))
+        self.quedan -= 1
+        esperar_con_aborto(self.page, int(parte * 1000), donde)
+
+    def antes_del_clic(self, donde: str):
+        restante = self.limite - time.monotonic()
+        self.quedan = 0
+        if restante > 0:
+            esperar_con_aborto(self.page, int(restante * 1000), donde)
 
 
 def _visible(locator) -> bool:
@@ -237,13 +275,22 @@ class EjecutorWeb(EjecutorBase):
                  f"{trabajo['contrato']}, SL {trabajo['sl_ticks']} TP {trabajo['tp_ticks']} "
                  f"ticks{en_usd}]")
 
+        inicio = time.monotonic()
         page = self._pagina(cuenta, plataforma)
+        pausa, ritmo = None, None
+        if plataforma.get("ritmo"):
+            pausas = (len(plataforma.get("pasos_seleccionar_cuenta") or [])
+                      + len(plataforma["pasos_orden"]) + 1)
+            ritmo = Ritmo(page, plataforma["ritmo"], inicio, pausas)
+            pausa = ritmo.antes_de_un_paso
+            log.info(f"Ritmo ({etiqueta}): {ritmo.limite - inicio:.1f} s hasta el clic, "
+                     f"en {pausas} pausas desparejas.")
 
         # --- hasta el clic: todo se puede deshacer -------------------------
         try:
             if plataforma.get("pasos_seleccionar_cuenta"):
                 ejecutar_pasos(page, plataforma["pasos_seleccionar_cuenta"], valores, to,
-                               "seleccionar cuenta")
+                               "seleccionar cuenta", pausa=pausa)
             try:
                 antes = leer_posiciones(page, plataforma["posiciones"],
                                         texto_de_fila(plataforma["posiciones"], valores), to)
@@ -253,8 +300,10 @@ class EjecutorWeb(EjecutorBase):
                 raise RuntimeError(
                     f"no se pudo leer el panel de posiciones ({e}); sin eso no se "
                     f"puede verificar la orden, asi que NO se hace clic") from e
-            ejecutar_pasos(page, plataforma["pasos_orden"], valores, to, "orden")
+            ejecutar_pasos(page, plataforma["pasos_orden"], valores, to, "orden", pausa=pausa)
             page.locator(boton).wait_for(state="visible", timeout=to)
+            if ritmo is not None:
+                ritmo.antes_del_clic(f"ritmo antes del clic de {nombre_boton}")
             chequear_aborto(f"antes del clic de {nombre_boton}")
 
             if self.dry_run:

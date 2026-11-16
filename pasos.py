@@ -151,6 +151,27 @@ def _problemas_de_login(login) -> list:
     return problemas
 
 
+RITMO_MAXIMO_S = 60
+
+
+def _problemas_de_ritmo(ritmo) -> list:
+    """ritmo: {"segundos_hasta_el_clic": 12, "variacion_s": 2}. Un numero
+    absurdo es un error de config: con el precio moviendose, no se espera un
+    minuto para entrar."""
+    if not isinstance(ritmo, dict):
+        return ["'ritmo' tiene que ser un objeto"]
+    segundos = ritmo.get("segundos_hasta_el_clic")
+    variacion = ritmo.get("variacion_s", 0)
+    numero = (lambda x: isinstance(x, (int, float)) and not isinstance(x, bool))
+    if not numero(segundos) or not 0 < segundos <= RITMO_MAXIMO_S:
+        return [f"'ritmo.segundos_hasta_el_clic' tiene que ser un numero entre 0 y "
+                f"{RITMO_MAXIMO_S}, no {segundos!r}"]
+    if not numero(variacion) or not 0 <= variacion < segundos:
+        return [f"'ritmo.variacion_s' tiene que ser un numero >= 0 y menor que "
+                f"segundos_hasta_el_clic, no {variacion!r}"]
+    return []
+
+
 def _problemas_de_pasos(nombre: str, pasos) -> list:
     if not isinstance(pasos, list):
         return [f"'{nombre}' tiene que ser una lista de pasos"]
@@ -225,6 +246,8 @@ def validar_plataforma(nombre: str, datos: dict) -> list:
                          "fila (pasos_despues) O en el ticket (verificar_despues), no en los dos")
     if "login" in datos:
         problemas.extend(_problemas_de_login(datos["login"]))
+    if "ritmo" in datos:
+        problemas.extend(_problemas_de_ritmo(datos["ritmo"]))
     posiciones = datos.get("posiciones")
     if not isinstance(posiciones, dict):
         problemas.append("'posiciones' sin configurar (hace falta para verificar la orden)")
@@ -345,7 +368,7 @@ def esperar_con_aborto(page, ms: int, donde: str):
 
 
 def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: str,
-                   con_aborto: bool = True, raiz=None):
+                   con_aborto: bool = True, raiz=None, pausa=None):
     """Corre los pasos en orden. Levanta OperacionAbortada si se pide parar
     entre pasos, o la excepcion de Playwright si un paso falla.
 
@@ -355,10 +378,15 @@ def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: st
 
     raiz: un locator (la fila de la posicion) contra el que se resuelven los
     selectores. None = la pagina entera.
+
+    pausa: fn(donde) que se llama antes de cada paso (el "ritmo" de la
+    plataforma, ver ejecutor_web). Tiene que esperar con aborto.
     """
     base = page if raiz is None else raiz
     for n, paso in enumerate(pasos, start=1):
         donde = f"{nombre} paso {n} ({paso.get('accion')})"
+        if pausa is not None:
+            pausa(donde)
         if con_aborto:
             chequear_aborto(donde)
         accion = paso["accion"]
