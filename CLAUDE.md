@@ -78,6 +78,26 @@ Contratos, SL y TP son **enteros estrictos**. CUENTA es un alias, varios
 separados por coma, o `all`. El símbolo raíz se traduce al contrato con la
 tabla `simbolos` de cada plataforma.
 
+## Alias de las cuentas y perfiles
+
+- **El alias dice la FIRMA y un número**, no la plataforma: `MFF1`, `MFF2`
+  (My Funded Futures), `LUC1` (Lucid), `TFY1` (Tradeify), `TOP1` (Topstep).
+  En Tradovate pueden convivir varias firmas, y `TRA1` no diría cuál es.
+- El perfil del navegador, si la cuenta no dice otra cosa, es
+  `perfiles/<ALIAS>`. **Al renombrar una cuenta** hay que poner
+  `"perfil": "perfiles/<ALIAS_VIEJO>"`: si no, el bot abre un perfil vacío
+  y se pierde el login (en Tradovate, la contraseña guardada en Edge y con
+  ella el autologin). Si la cuenta ya tenía `"perfil"`, se conserva.
+- **Cada login de Tradovate necesita su propio perfil**, con su usuario y
+  contraseña cargados a mano por el operador en `edge://settings/passwords`
+  de ese perfil (ver "Autologin" en "PC FUTVAN5").
+- **Las cuentas que comparten login comparten perfil** (como `TOP1`..`TOP5`
+  en `perfiles\TOPSTEPX`). El ejecutor abre un navegador por perfil, no por
+  cuenta. En Tradovate, la segunda cuenta en el mismo login todavía no
+  funciona: ver el TODO en "PC FUTVAN5".
+- Medir con `python config.py` después de cualquier cambio: la cuenta tiene
+  que aparecer con el perfil esperado y sin "Cuenta descartada".
+
 ## Convivencia con el bot de MT5 en la misma PC
 
 Todo lleva nombres propios a propósito:
@@ -300,8 +320,13 @@ redirige a `login.topstep.com`.
 
 Mini PC con el bot de MT5 corriendo al lado (pyautogui y plantillas de
 píxeles en 1920x1080). Opera **solo Tradovate**: prefijo `FUTVAN5`, bot
-@FUTVAN5_bot, cuenta `TRA1` = `MFFUSFBLDR700298009` (un solo login, una
+@FUTVAN5_bot, cuenta `MFF1` = `MFFUSFBLDR700298009` (un solo login, una
 cuenta, "Demo & Active"), `max_riesgo_usd: 800`, ventana **visible**.
+La cuenta se llamó `TRA1` hasta el 16/11/2026; se renombró a `MFF1` por la
+convención de alias (ver "Alias de las cuentas y perfiles"). Tiene
+`"perfil": "perfiles/TRA1"` en el `config.local.json`: sin eso el bot
+buscaría `perfiles\MFF1` (vacío) y se perdería la contraseña cargada en
+Edge, o sea el autologin.
 Python313 es el mismo del bot de MT5: Playwright se instaló después de un
 `pip install --dry-run` que mostró que solo **agregaba** paquetes.
 
@@ -378,15 +403,30 @@ Python313 es el mismo del bot de MT5: Playwright se instaló después de un
       "E-Micro Euro": ningún elemento dice exactamente el contrato. Se elige
       con `click_texto` **no exacto** dentro de `ul.dropdown-menu` y después
       se verifica el campo.
-  - Con eso, `FUTVAN5 M6E buy 1 4 4 TRA1` tardó 17 s del mensaje al ticket
+  - Con eso, `FUTVAN5 M6E buy 1 4 4 TRA1` (hoy `MFF1`) tardó 17 s del mensaje al ticket
     completo, autologin incluido, y se detuvo antes de Send.
   - `FUTVAN99 …` y la misma línea sin prefijo quedaron "ignorado".
 - Sin medir todavía:
   - que el **precio** del STP/LMT guardado esté a SL/TP ticks del fill
     (después de Send se verifica que existan y estén "Working", no la
     distancia);
-  - el cambio entre varias cuentas;
   - cuánto dura la sesión con el navegador abierto por horas.
+- **TODO: segunda cuenta en el mismo login.** Hoy `pasos_seleccionar_cuenta`
+  de Tradovate solo **verifica** que el desplegable de cuenta
+  (`[class*='account'][class*='dropdown']`) muestre `{cuenta_plataforma}`;
+  **no cambia** de cuenta. Con una segunda cuenta en el mismo login, una
+  orden para ella se cortaría en esa verificación (no opera en la
+  equivocada, pero no opera). Falta medir, sin clic en Send:
+  - abrir el desplegable: qué elemento lo abre y si es único;
+  - la opción de cada cuenta: medida solo con una cuenta,
+    `[data-testid='account-item-<cuenta>']`. Confirmar que sea única con
+    dos cuentas. **En el mismo menú están "Go to Replay" y "Logout"**: usar
+    solo el testid exacto;
+  - qué pasa en la página al cambiar: si recarga, si vuelve a
+    `/trading-mode` o al login, y cuánto tarda;
+  - si el Order Ticket y Positions muestran la cuenta nueva, y si conservan
+    el contrato y el bracket;
+  - después de cambiar, la misma verificación de hoy sobre el desplegable.
 
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 
