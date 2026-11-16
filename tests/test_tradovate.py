@@ -369,11 +369,23 @@ class TestConfigRealDeTradovate(unittest.TestCase):
         # el input esta tapado y no refleja el estado (dry run 13/11 14:22).
         self.assertEqual([p for p in pasos if p["accion"] == "marcar"], [])
         exigidas = [p["selector"] for p in pasos if p["accion"] == "esperar"
-                    and "checkbox-label" in p["selector"]]
+                    and "checkbox-label" in p.get("selector", "")]
         self.assertEqual(len(exigidas), 2)
         self.assertTrue(all("[class*='checkbox-active']" in s for s in exigidas))
         unidades = [p for p in pasos if "show-in-units" in p.get("selector", "")]
         self.assertEqual(unidades[0]["igual"], "Ticks")
+
+    def test_pausa_entre_abrir_la_cantidad_y_elegirla(self):
+        # 16/11/2026: por Telegram, 2 de 3 ordenes quedaron con QTY vacia
+        # aunque el clic en la cantidad no dio error. Pedido del usuario: el
+        # ticket se llena mas despacio (~12 s); la pausa clave es esta.
+        pasos = self.tv["pasos_orden"]
+        abrir = next(i for i, p in enumerate(pasos)
+                     if p.get("selector") == "[data-testid='order-ticket-quantity'] .btn")
+        siguiente = pasos[abrir + 1]
+        self.assertEqual(siguiente["accion"], "esperar")
+        self.assertGreaterEqual(siguiente["ms"], 500)
+        self.assertEqual(pasos[abrir + 2]["accion"], "click_texto")
 
     def test_contrato_antes_que_cantidad(self):
         # Medido: cambiar el simbolo VACIA la cantidad.

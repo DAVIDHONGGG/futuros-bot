@@ -52,8 +52,17 @@
             "selector": "[data-testid='simulation-button']"
           },
           {
+            "_por_que": "PAUSAS del login (16/11/2026, pedido del usuario): no elegir 'Start Simulated Trading' apenas aparece, y dejar que el layout cargue antes de empezar el ticket. Sin pausas el login tardaba 6,7-7,9 s (4 medidos ese dia).",
+            "accion": "esperar",
+            "ms": 1500
+          },
+          {
             "accion": "click",
             "selector": "[data-testid='simulation-button']"
+          },
+          {
+            "accion": "esperar",
+            "ms": 3000
           }
         ]
       },
@@ -101,6 +110,11 @@
           "igual": "{contrato}"
         },
         {
+          "_por_que": "PAUSAS (16/11/2026, pedido del usuario: el ticket se llena en ~12 s y no en ~3). Por Telegram, 2 de 3 ordenes fallaron con QTY vacia en el paso de verificar la cantidad, aunque el clic en '1' no dio error; un script con unos ms extra entre pasos no fallo 3 de 3. Sospecha sin medir: el clic llega mientras la pagina todavia procesa el cambio de contrato o la lista se dibuja. Cambiar el contrato VACIA la cantidad: aca se deja asentar el ticket.",
+          "accion": "esperar",
+          "ms": 2000
+        },
+        {
           "accion": "click_texto",
           "texto": "{lado}",
           "selector": "[data-testid='order-ticket-action-switch']"
@@ -111,14 +125,27 @@
           "igual": "{lado}"
         },
         {
+          "accion": "esperar",
+          "ms": 1000
+        },
+        {
           "_por_que": "El clic al centro cae en el input y NO abre la lista (dry run 13/11 14:19: la opcion quedo oculta). Abre el boton de la flecha: div.btn con div.caret (medido en el DOM).",
           "accion": "click",
           "selector": "[data-testid='order-ticket-quantity'] .btn"
         },
         {
+          "_por_que": "Que la lista de cantidades termine de abrirse antes del clic (ver PAUSAS arriba).",
+          "accion": "esperar",
+          "ms": 1000
+        },
+        {
           "accion": "click_texto",
           "texto": "{contratos}",
           "selector": "[data-testid='order-ticket-quantity']"
+        },
+        {
+          "accion": "esperar",
+          "ms": 1500
         },
         {
           "accion": "verificar",
@@ -139,6 +166,10 @@
           "igual": "MARKET"
         },
         {
+          "accion": "esperar",
+          "ms": 1000
+        },
+        {
           "accion": "verificar",
           "selector": "[data-testid='order-ticket-release-switch'] [class*='active']",
           "igual": "Off"
@@ -147,6 +178,10 @@
           "accion": "click_si_aparece",
           "selector": "[data-testid='simple-tpsl-order-ticket-enable-tpsl-button']",
           "ms": 500
+        },
+        {
+          "accion": "esperar",
+          "ms": 1000
         },
         {
           "accion": "verificar",
@@ -172,6 +207,10 @@
         },
         {
           "accion": "esperar",
+          "ms": 500
+        },
+        {
+          "accion": "esperar",
           "selector": "[data-testid='simple-tpsl-bracket-0-stop-loss-checkbox-label'][class*='checkbox-active']"
         },
         {
@@ -185,6 +224,10 @@
           "selector": "[data-testid='simple-tpsl-bracket-0-stop-loss-input'] input",
           "igual": "{sl_ticks}",
           "numerico": true
+        },
+        {
+          "accion": "esperar",
+          "ms": 500
         },
         {
           "accion": "verificar",
