@@ -93,8 +93,8 @@ tabla `simbolos` de cada plataforma.
   de ese perfil (ver "Autologin" en "PC FUTVAN5").
 - **Las cuentas que comparten login comparten perfil** (como `TOP1`..`TOP5`
   en `perfiles\TOPSTEPX`). El ejecutor abre un navegador por perfil, no por
-  cuenta. En Tradovate, la segunda cuenta en el mismo login todavía no
-  funciona: ver el TODO en "PC FUTVAN5".
+  cuenta. En Tradovate, el bot elige la cuenta en el desplegable antes de
+  cada orden (medido con 5 cuentas en un login, ver "PC FUTVAN4").
 - Medir con `python config.py` después de cualquier cambio: la cuenta tiene
   que aparecer con el perfil esperado y sin "Cuenta descartada".
 
@@ -167,6 +167,10 @@ Todo lleva nombres propios a propósito:
   Falta el dry run real y la primera orden del bot.
 - **TopstepX con autologin "Continue with Google"** desde el 16/11/2026 (PC
   FUTVAN7, ver "PC FUTVAN7, 16/11/2026"). 331 tests en verde.
+- **Tradovate con varias cuentas en un login** desde el 16/11/2026 (PC
+  FUTVAN4, Lucid, ver "PC FUTVAN4"): `pasos_seleccionar_cuenta` cambia de
+  cuenta en el desplegable. 347 tests en verde. Falta medir si el ticket y
+  Positions siguen a la cuenta elegida.
 - `telegram_allowed_user_id` en `config.json`: los mismos tres ids de Telegram
   que la flota de MT5 (lo confirmó el usuario).
 - **El bot va a correr en otra PC**, no en la de desarrollo. Ahí hay que
@@ -435,22 +439,66 @@ Python313 es el mismo del bot de MT5: Playwright se instaló después de un
     (después de Send se verifica que existan y estén "Working", no la
     distancia);
   - cuánto dura la sesión con el navegador abierto por horas.
-- **TODO: segunda cuenta en el mismo login.** Hoy `pasos_seleccionar_cuenta`
-  de Tradovate solo **verifica** que el desplegable de cuenta
-  (`[class*='account'][class*='dropdown']`) muestre `{cuenta_plataforma}`;
-  **no cambia** de cuenta. Con una segunda cuenta en el mismo login, una
-  orden para ella se cortaría en esa verificación (no opera en la
-  equivocada, pero no opera). Falta medir, sin clic en Send:
-  - abrir el desplegable: qué elemento lo abre y si es único;
-  - la opción de cada cuenta: medida solo con una cuenta,
-    `[data-testid='account-item-<cuenta>']`. Confirmar que sea única con
-    dos cuentas. **En el mismo menú están "Go to Replay" y "Logout"**: usar
-    solo el testid exacto;
-  - qué pasa en la página al cambiar: si recarga, si vuelve a
-    `/trading-mode` o al login, y cuánto tarda;
-  - si el Order Ticket y Positions muestran la cuenta nueva, y si conservan
-    el contrato y el bracket;
-  - después de cambiar, la misma verificación de hoy sobre el desplegable.
+- ~~TODO: segunda cuenta en el mismo login~~: resuelto en FUTVAN4
+  (16/11/2026), ver "PC FUTVAN4". Hasta entonces `pasos_seleccionar_cuenta`
+  solo verificaba la cuenta y no la cambiaba. **Después del update hay que
+  probar en esta PC** que la orden de `MFF1` siga pasando: con una sola
+  cuenta, el bot elige la que ya está (en FUTVAN4 eso no tuvo efectos).
+
+### PC FUTVAN4: Lucid en Tradovate, varias cuentas en un login (16/11/2026)
+
+PC VAN4, con el bot de MT5 corriendo al lado (no se tocó). Opera **solo
+Tradovate**, cuentas de **Lucid**: prefijo `FUTVAN4`, bot @FUTVAN4_bot,
+`LUC1`..`LUC5` = `LFE05089433290001`, `…0003`, `…0005`, `…0006` y `…0007`.
+Las cinco están en **un solo login** y comparten el perfil `perfiles/LUCID`.
+`max_riesgo_usd: 800`, `max_contratos: 1` ("por ahora", usuario),
+`cuenta_por_defecto: null` (con cinco cuentas no se adivina), ventana
+**visible**.
+
+- **Lucid usa la misma web que MFF**, `https://trader.tradovate.com/`. El
+  login, `/trading-mode` con "Start Simulated Trading" (`simulation-button`)
+  y `balance-view-panel` son iguales que en FUTVAN5: el bloque `tradovate`
+  compartido sirve tal cual, sin separar por firma.
+- **Autologin:** funcionó igual que en FUTVAN5. Ojo: **Edge pide la
+  credencial de Windows para editar** una contraseña guardada (para
+  agregarla no). Con una contraseña mal cargada y sin esa credencial, la
+  salida fue un perfil nuevo; el viejo quedó como `perfiles\LUCID_viejo`.
+- **`cuenta_plataforma` es el número a secas**, el mismo que muestra el
+  disparador del desplegable en su `.name`.
+- **El desplegable de cuenta** (medido sin Send):
+  - Es único. Su disparador `[data-toggle='dropdown']` lo abre **y lo
+    cierra**; **Escape no lo cierra**.
+  - El menú (`ul.dropdown-menu`) lista cada cuenta como
+    `li[data-testid='account-item-<cuenta>']`, con el número exacto en
+    `div.main`. Después vienen "Manage Groups", "Go to Replay" y "Logout",
+    **con la misma clase `a.account`**: nunca elegir por clase.
+  - Con el menú abierto, el texto del contenedor trae **todas** las
+    cuentas: un "contiene" sobre el contenedor pasaría con cualquiera.
+- **Elegir una cuenta** la cambia en 0,3 s, sin recargar ni navegar; el menú
+  se cierra solo y el EQUITY pasa a la cuenta nueva.
+- **`pasos_seleccionar_cuenta` (bloque compartido) ahora cambia de cuenta:**
+  clic en el disparador, esperar el menú, `click_texto` **exacto** de
+  `{cuenta_plataforma}` **dentro del menú** (así nunca cae en Logout ni en
+  Replay; los selectores no admiten marcadores, por eso no se usa el
+  testid), esperar 1 s y `verificar` que el `.name` del disparador sea
+  **igual** a la cuenta. Probado en vivo con los pasos reales:
+  - de `LUC2` a `LUC1`: OK en 1,3 s, sin navegación, menú cerrado, EQUITY
+    de la cuenta nueva;
+  - `LUC1` ya elegida (el caso de MFF con una cuenta): OK en 1,2 s, menú
+    cerrado, nada cambió.
+- **Workspace de Lucid:** "Order Ticket", "Accounts" y "Positions" son
+  pestañas del mismo panel, como venía en FUTVAN5, y hay tres carteles de
+  novedades abiertos ("Lock accounts individually", "Plan exits on the Order
+  ticket", "Risk settings"). El operador tiene que mover Positions a su
+  propio panel y cerrar los carteles antes de la primera orden; si no, el
+  bot falla sin operar.
+- **Sin medir todavía** (necesita una orden real mínima del operador):
+  - si el Order Ticket manda la orden a la cuenta elegida arriba;
+  - el interruptor S/A del panel Positions (¿cuenta elegida o todas?). Si
+    muestra todas, una posición de `LUC1` haría creer a una orden de `LUC2`
+    que "ya había posición".
+  - En FUTVAN4 no se instaló todavía el listener ni la tarea programada, y
+    no hubo dry run por Telegram.
 
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 

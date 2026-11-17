@@ -66,12 +66,29 @@
           }
         ]
       },
-      "_pasos_seleccionar_cuenta": "Un solo login con UNA cuenta (MFFUSFBLDR700298009, 'Demo & Active'). NO se abre el menu de cuentas: en el mismo menu estan 'Go to Replay' y 'Logout'. Solo se verifica que el desplegable (unico, medido) muestre la cuenta de la orden; si no, no se opera. Con varias cuentas habra que medir el cambio: la opcion es [data-testid='account-item-<cuenta>'].",
+      "_pasos_seleccionar_cuenta": "CAMBIA a la cuenta de la orden (medido en FUTVAN4 con 5 cuentas de Lucid en un login, 16/11/2026). El desplegable (unico) tiene un disparador [data-toggle='dropdown'] que abre Y cierra el menu (Escape NO lo cierra). El menu lista cada cuenta como li[data-testid='account-item-<cuenta>'] con div.main = el numero exacto, y despues 'Manage Groups', 'Go to Replay' y 'Logout', con la MISMA clase a.account: por eso la cuenta se elige por su TEXTO EXACTO dentro del menu (nunca por clase), y ese texto nunca puede ser Logout. Elegirla cambia la cuenta en 0,3 s sin recargar ni navegar, el menu se cierra solo y el EQUITY pasa a la cuenta nueva. Despues se verifica el nombre del disparador (no el contenedor: con el menu abierto su texto trae TODAS las cuentas). Con una sola cuenta (MFF) se elige la que ya esta: falta medir ese caso en vivo.",
       "pasos_seleccionar_cuenta": [
         {
+          "accion": "click",
+          "selector": "[class*='account'][class*='dropdown'] > [data-toggle='dropdown']"
+        },
+        {
+          "accion": "esperar",
+          "selector": "[class*='account'][class*='dropdown'] > ul.dropdown-menu"
+        },
+        {
+          "accion": "click_texto",
+          "texto": "{cuenta_plataforma}",
+          "selector": "[class*='account'][class*='dropdown'] > ul.dropdown-menu"
+        },
+        {
+          "accion": "esperar",
+          "ms": 1000
+        },
+        {
           "accion": "verificar",
-          "selector": "[class*='account'][class*='dropdown']",
-          "contiene": "{cuenta_plataforma}"
+          "selector": "[class*='account'][class*='dropdown'] > [data-toggle='dropdown'] .name",
+          "igual": "{cuenta_plataforma}"
         }
       ],
       "_pasos_orden": "En la pestana 'Order Ticket' (todo data-testid, unico y visible, medido 13:29 con Positions a la vista). Despues de cada orden el panel muestra el HISTORIAL de esa orden; la flecha vuelve al formulario. Al escribir M6EZ6 hay 1 sugerencia ('M6EZ6 E-Micro Euro'). Cambiar el simbolo VACIA la cantidad: contrato primero. Cantidad: combo con 1, 2, 3, 4, 5, 10, 15, 20 (texto exacto). Tipo: MARKET (estaba en LIMIT). RELEASE en Off: asi salieron las ordenes del operador. SL/TP: el BRACKET del ticket, en TICKS (el formato de Telegram): queda activado entre ordenes; se exige TP y SL marcados (clase checkbox-active del label: el input tapado no refleja el estado), se escriben con teclear (como el operador, para que React tome el valor) y se releen. NO tocar 'Add take profit / stop loss' ni Presets. Send es el MISMO boton para comprar y vender: el lado se verifica al final, justo antes del clic. Reset (pasos_limpiar) vacia contrato y cantidad (medido en el dry run).",

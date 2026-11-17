@@ -438,6 +438,35 @@ class TestConfigRealDeTradovate(unittest.TestCase):
                 self.assertNotIn("name-input", paso.get("selector", ""))
                 self.assertNotIn("password", paso.get("selector", "").lower())
 
+    def test_cambio_de_cuenta_por_texto_exacto_dentro_del_menu(self):
+        # Medido en FUTVAN4 (Lucid, 5 cuentas en un login, 16/11/2026): en el
+        # menu de cuentas tambien estan 'Go to Replay' y 'Logout', con la
+        # misma clase a.account. La cuenta se elige SOLO por su texto exacto
+        # y SOLO dentro del menu.
+        pasos = self.tv["pasos_seleccionar_cuenta"]
+        menu = "[class*='account'][class*='dropdown'] > ul.dropdown-menu"
+        disparador = "[class*='account'][class*='dropdown'] > [data-toggle='dropdown']"
+        self.assertEqual([p["accion"] for p in pasos],
+                         ["click", "esperar", "click_texto", "esperar", "verificar"])
+        self.assertEqual(pasos[0]["selector"], disparador)
+        self.assertEqual(pasos[1]["selector"], menu)
+        elegir = pasos[2]
+        self.assertEqual(elegir["texto"], "{cuenta_plataforma}")
+        self.assertEqual(elegir["selector"], menu)
+        self.assertIsNot(elegir.get("exacto", True), False)
+        # Los unicos clics: el disparador (abre) y la cuenta (texto exacto).
+        clics = [p for p in pasos if p["accion"] in ("click", "click_texto", "click_si_aparece",
+                                                    "doble_click", "repetir")]
+        self.assertEqual(clics, [pasos[0], elegir])
+
+    def test_despues_de_cambiar_se_verifica_el_nombre_del_disparador(self):
+        # No el contenedor: con el menu abierto su texto trae TODAS las
+        # cuentas y un "contiene" pasaria con cualquiera.
+        ultimo = self.tv["pasos_seleccionar_cuenta"][-1]
+        self.assertEqual(ultimo["accion"], "verificar")
+        self.assertEqual(ultimo["igual"], "{cuenta_plataforma}")
+        self.assertTrue(ultimo["selector"].endswith("> [data-toggle='dropdown'] .name"))
+
     def test_posiciones_y_contrato_de_un_digito(self):
         self.assertEqual(self.tv["posiciones"]["texto_fila"], "{contrato}")
         self.assertEqual(self.tv["simbolos"]["M6E"], "M6EZ6")
