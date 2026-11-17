@@ -172,6 +172,9 @@ Todo lleva nombres propios a propósito:
   cuenta en el desplegable; el ticket y Positions siguen a la cuenta elegida
   (orden real del operador, 17/11/2026). NET POS se busca por el nombre de
   la columna. 359 tests en verde.
+- **Tradeify en Tradovate, en vivo** desde el 17/11/2026 (PC FUTVAN8, ver
+  "PC FUTVAN8"): primera orden real del bot con el bracket verificado. El
+  bloque `tradovate` sirvió sin cambios. 363 tests en verde.
 - `telegram_allowed_user_id` en `config.json`: los mismos tres ids de Telegram
   que la flota de MT5 (lo confirmó el usuario).
 - **El bot va a correr en otra PC**, no en la de desarrollo. Ahí hay que
@@ -436,9 +439,10 @@ Python313 es el mismo del bot de MT5: Playwright se instaló después de un
     completo, autologin incluido, y se detuvo antes de Send.
   - `FUTVAN99 …` y la misma línea sin prefijo quedaron "ignorado".
 - Sin medir todavía:
-  - que el **precio** del STP/LMT guardado esté a SL/TP ticks del fill
-    (después de Send se verifica que existan y estén "Working", no la
-    distancia);
+  - ~~que el **precio** del STP/LMT guardado esté a SL/TP ticks del fill~~:
+    medido en FUTVAN8 con Tradeify (fill 26996.50, LMT 26986.50 y STP
+    27006.50 con 40/40 ticks). El bot sigue verificando que existan y
+    estén "Working", no la distancia;
   - cuánto dura la sesión con el navegador abierto por horas.
 - ~~TODO: segunda cuenta en el mismo login~~: resuelto en FUTVAN4
   (16/11/2026), ver "PC FUTVAN4". Hasta entonces `pasos_seleccionar_cuenta`
@@ -537,6 +541,77 @@ Las cinco están en **un solo login** y comparten el perfil `perfiles/LUCID`.
   - **El bracket del ticket es por cuenta**: en LUC2 estaba apagado y el
     bot lo prendió con `simple-tpsl-order-ticket-enable-tpsl-button`.
 - En FUTVAN4 no se instaló todavía el listener como tarea programada.
+
+### PC FUTVAN8: Tradeify en Tradovate (17/11/2026)
+
+PC VAN8, con el bot de MT5 corriendo al lado (`C:\mt5-bot`, tarea `mt5-bot
+listener`; no se tocó). Opera **solo Tradovate**, cuentas de **Tradeify**:
+prefijo `FUTVAN8`, bot @FUTVAN8_bot, `TFY1` = `FTDFYSLX50527729629` (un
+solo login, una cuenta por ahora, perfil `perfiles/TRADEIFY` para que las
+TFY que se sumen lo compartan). `max_riesgo_usd: 800`, `max_contratos: 1`,
+ventana **visible**. Python313 es el del bot de MT5: Playwright 1.64.1 se
+instaló después de un `pip install --dry-run` que solo **agregaba**
+greenlet, playwright y pyee.
+
+- **El número que da Tradeify no es el de Tradovate.** El operador pasó
+  `TDFYU175192319` (su id de Tradeify: aparece en la columna COMMENT de las
+  órdenes); el desplegable dice `FTDFYSLX50527729629` ("Demo & Active"),
+  en el `.name` del disparador y en `account-item-…`. `cuenta_plataforma`
+  es lo que dice el desplegable: con el otro, el `verificar` de la cuenta
+  frena antes del ticket.
+- **Misma plataforma, no la misma pantalla que MFF.** `/trading-mode` dice
+  "Your user is associated with Tradeify…", y al lado de "Start Simulated
+  Trading" (`simulation-button`, igual) el botón dice **"Access Market
+  Replay"** (no "Purchase"), con el mismo `market-replay-button`. Hay un
+  banner "Accept Cookies" que no molesta. El `login` del bloque compartido
+  sirvió tal cual: autologin 7 de 7, ~9 s hasta la sesión.
+- **Workspace por defecto de Tradeify:** gráfico con su barra (Buy Mkt /
+  Sell Mkt, "TP/SL: Strategy 1": el bot no la usa) y Accounts abajo; **sin
+  Order Ticket ni Positions**, y dos carteles ("Lock accounts
+  individually", "Risk settings are here now"). El operador agregó Positions
+  y Order Ticket en paneles propios, cerró los carteles y maximizó la
+  ventana. El layout se conservó en cada reapertura del navegador (la
+  sesión no, por eso el autologin).
+- **Positions de Tradeify:** 4 columnas (`SYMBOL`, `NET POS`, `NET PRICE`,
+  `OPEN P/L, $`) y **sin fila** cuando no hay posición. NET POS por nombre
+  de columna sirve igual.
+- **El Order Ticket tiene scroll propio** y no se puede agrandar más: con
+  el bracket prendido, "Take profit / stop loss" queda debajo de Send. No
+  hace falta: Playwright desplaza el panel solo, para escribir los ticks y
+  para el clic en Send (dry run local y orden real, medido).
+- **El bracket estaba apagado** en la cuenta nueva (como en LUC2); se
+  prendió a mano y queda prendido entre órdenes.
+- **Diálogo de confirmación (13:15):** después de Send apareció "Sell 1
+  MKT?" con "[Buy 1 STP at MKT+1.00]" / "[Buy 1 LMT at MKT-1.00]", botones
+  **Sell / Cancel** y "DO NOT SHOW AGAIN" marcado. `pasos_confirmar` está
+  vacío: la orden **no salió** y el bot avisó "no confirmada" (correcto).
+  En las órdenes siguientes no volvió a aparecer. **TODO, sin medir:** el
+  selector del botón del diálogo en el DOM; si vuelve a salir, el bot falla
+  sin operar.
+- **Falsa alarma "SIN SL/TP" con un bracket chico (13:17, 4/4 ticks):**
+  entrada 27053.25, el TP (LMT 27052.25) se llenó en segundos y el STP pasó
+  a "Canceled" antes de que `verificar_despues` buscara "STP at … -
+  Working". La posición ya estaba cerrada. **TODO:** aceptar una pata
+  "Filled" y la otra "Canceled" cuando la posición volvió a 0.
+- **Orden real del bot OK de punta a punta (13:23, `MNQ sell 1 40 40
+  TFY1`, navegador ya abierto):** clic en Send 13:23:23,5, posición `[] ->
+  ['-1']` en 0,4 s y "SL/TP del bracket verificados" a los 0,7 s del clic.
+  En el resumen: fill 26996.50, LMT 26986.50 y STP 27006.50, o sea **40/40
+  ticks exactos**. Cerró después por el TP.
+- **Flecha del resumen (`icon-back`):** después de una orden confirmada el
+  ticket queda en el resumen. A las 13:23 el formulario ya estaba a la
+  vista (el `click_si_aparece` de la flecha no la encontró y no hizo falta;
+  sin medir por qué volvió solo). A las 13:27, con el resumen de la orden
+  anterior en pantalla, el selector de FUTVAN5 **la encontró y volvió al
+  formulario** (paso 2, 0,1 s antes de la "×"). Esa orden (`MNQ sell 1 40
+  40 TFY1`) también salió completa: Send 13:27:16,7, `[] -> ['-1']` en
+  0,1 s y bracket verificado a los 0,24 s del clic.
+- Dry run por Telegram (13:06, chat privado): `FUTVAN8 MNQ sell 1 4 4
+  TFY1` llenó el ticket y frenó antes de Send en 32 s. La compra, el
+  prefijo ajeno y la línea sin prefijo **no llegaron** al listener (no
+  quedó rastro en el log): sin probar en vivo en esta PC.
+- **Falta:** la tarea programada `bot-futuros listener` (el listener corrió
+  desde una sesión de Claude) y los dos TODO de arriba.
 
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 
