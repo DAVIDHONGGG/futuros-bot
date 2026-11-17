@@ -24,6 +24,10 @@ Cada plataforma dice COMO capturar una orden con una lista de pasos:
     {"accion": "click_si_aparece", "selector": "<boton de un dialogo>", "ms": 500}
                               (si aparece en ms, clic; si no, sigue. Se busca en la
                               PAGINA aunque el paso corra dentro de una fila)
+    {"accion": "click_si_aparece", "selector": "<lista>", "texto": "{contrato}",
+                              "exacto": false, "ms": 3000}
+                              (lo mismo, pero el elemento con ESE texto dentro de
+                              <lista>, como click_texto; si hay dos, no hace clic)
     {"accion": "verificar",   "selector": "<input>", "igual": "{riesgo_usd}", "numerico": true}
                               (lee el valor de un input o el texto de otro elemento
                               y CORTA la orden si no coincide: sin clic final)
@@ -445,12 +449,25 @@ def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: st
             # Un dialogo que a veces sale y a veces no: se busca en la PAGINA
             # (los dialogos no estan dentro de la fila) y si no aparece en
             # "ms" se sigue sin hacer nada.
-            aviso = page.locator(paso["selector"]).first
+            #
+            # Con "texto" (+ "exacto", como click_texto): el elemento con ese
+            # texto DENTRO del selector, y sin .first (si hubiera dos, no
+            # aparece "uno" y no se hace clic). Medido en FUTVAN4 (17/11/2026):
+            # la primera busqueda de un contrato despues de entrar VUELVE a
+            # abrir la lista de sugerencias ~1-3 s despues de elegirlo, y la
+            # lista tapa Buy/Sell; un segundo clic en el contrato la cierra.
+            if "texto" in paso:
+                aviso = page.locator(paso["selector"]).get_by_text(
+                    rellenar(paso["texto"], valores), exact=bool(paso.get("exacto", True)))
+                que = f"{paso['texto']} en {paso['selector']}"
+            else:
+                aviso = page.locator(paso["selector"]).first
+                que = paso["selector"]
             try:
                 aviso.wait_for(state="visible", timeout=int(paso.get("ms", 500)))
             except Exception:
                 continue
-            log.warning(f"{donde}: aparecio {paso['selector']}; se hace clic")
+            log.warning(f"{donde}: aparecio {que}; se hace clic")
             aviso.click(timeout=timeout_ms)
         else:   # validar_plataforma ya lo impide; por las dudas
             raise ValueError(f"{donde}: accion desconocida")

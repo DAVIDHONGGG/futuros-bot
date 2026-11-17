@@ -22,7 +22,7 @@ from tests.navegador_falso import PlaywrightFalso, fabrica
 
 import ejecutor
 from ejecutor_web import EjecutorWeb
-from pasos import leer_posiciones, validar_plataforma, valores_de
+from pasos import ejecutar_pasos, leer_posiciones, validar_plataforma, valores_de
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -230,6 +230,58 @@ class TestCantidadPorNombreDeColumna(unittest.TestCase):
         self.assertEqual(pos["cantidad"], "[role=gridcell]")
         self.assertTrue(pos["encabezados"].startswith(pos["panel"] + " "))
         self.assertTrue(pos["filas"].startswith(pos["panel"] + " "))
+
+
+class TestListaQueSeVuelveAAbrir(unittest.TestCase):
+    """FUTVAN4 (17/11/2026): la primera busqueda de un contrato vuelve a abrir
+    la lista de sugerencias despues de elegirlo, y tapa Buy/Sell. Un segundo
+    clic en el contrato la cierra."""
+
+    MENU = "[data-testid='order-ticket-main-entry'] [data-testid='typeahead-wrapper'] ul.dropdown-menu"
+
+    def setUp(self):
+        self.pw = PlaywrightFalso()
+        self.pw.chromium.launch_persistent_context()
+        self.page = self.pw.pagina()
+        self.paso = {"accion": "click_si_aparece", "selector": self.MENU,
+                     "texto": "{contrato}", "exacto": False, "ms": 50}
+
+    def test_si_aparece_hace_clic_en_el_contrato_dentro_de_la_lista(self):
+        ejecutar_pasos(self.page, [self.paso], {"contrato": "MNQZ6"}, 100, "orden")
+        self.assertEqual(self.pw.clics(), [f"{self.MENU} >> texto=MNQZ6"])
+
+    def test_si_no_aparece_no_hace_nada(self):
+        self.page.ocultos.add(f"{self.MENU} >> texto=MNQZ6")
+        ejecutar_pasos(self.page, [self.paso], {"contrato": "MNQZ6"}, 100, "orden")
+        self.assertEqual(self.pw.clics(), [])
+
+    def test_sin_texto_sigue_como_antes(self):
+        paso = {"accion": "click_si_aparece", "selector": "#dialogo", "ms": 50}
+        ejecutar_pasos(self.page, [paso], {}, 100, "orden")
+        self.assertEqual(self.pw.clics(), ["#dialogo"])
+
+    def test_config_real_segundo_clic_y_verificacion_antes_del_lado(self):
+        flota = json.loads((RAIZ / "config.json").read_text(encoding="utf-8"))
+        pasos = flota["plataformas"]["tradovate"]["pasos_orden"]
+        acciones = [(p["accion"], p.get("selector")) for p in pasos]
+        elegir = acciones.index(("click_texto", self.MENU))
+        # Antes de elegir, una pausa para que la lista filtre (recientes +
+        # populares pueden tener el contrato dos veces).
+        self.assertEqual(pasos[elegir - 1]["accion"], "esperar")
+        self.assertGreaterEqual(pasos[elegir - 1]["ms"], 1500)
+        self.assertEqual(pasos[elegir - 2]["accion"], "escribir")
+        verificar_campo = ("verificar", "[data-testid='order-ticket-symbol-search']")
+        self.assertEqual(acciones[elegir + 1], verificar_campo)
+        segundo = pasos[elegir + 2]
+        self.assertEqual((segundo["accion"], segundo["selector"], segundo["texto"]),
+                         ("click_si_aparece", self.MENU, "{contrato}"))
+        self.assertIs(segundo["exacto"], False)
+        self.assertGreaterEqual(segundo["ms"], 3000)
+        self.assertEqual(acciones[elegir + 3], verificar_campo)
+        self.assertEqual(pasos[elegir + 3]["igual"], "{contrato}")
+        lado = acciones.index(("click_texto", "[data-testid='order-ticket-action-switch']"))
+        self.assertLess(elegir + 3, lado)
+        self.assertEqual(validar_plataforma("tradovate", flota["plataformas"]["tradovate"]), [])
 
 
 class TestMarcadoresDeLado(unittest.TestCase):
@@ -544,7 +596,10 @@ class TestConfigRealDeTradovate(unittest.TestCase):
         self.assertIn("order-ticket-main-entry", anterior["selector"])
         # La sugerencia: por texto (no exacto: 'M6EZ6' va suelto junto a la
         # descripcion), acotada a la lista, y el campo se verifica despues.
-        sugerencia, verificacion = pasos[escribir + 1], pasos[escribir + 2]
+        # Entre escribir y elegir hay una pausa (FUTVAN4, 17/11/2026: que la
+        # lista filtre).
+        self.assertEqual(pasos[escribir + 1]["accion"], "esperar")
+        sugerencia, verificacion = pasos[escribir + 2], pasos[escribir + 3]
         self.assertEqual(sugerencia["accion"], "click_texto")
         self.assertEqual(sugerencia["texto"], "{contrato}")
         self.assertIs(sugerencia["exacto"], False)

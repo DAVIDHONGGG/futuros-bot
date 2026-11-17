@@ -115,11 +115,29 @@
           "teclear": true
         },
         {
+          "_por_que": "Que la lista FILTRE antes de elegir (FUTVAN4, 17/11/2026): con el campo vacio la lista muestra las busquedas RECIENTES y 'Popular Instruments', y el contrato puede estar en las dos; elegido a los ~1,7 s el clic encontro 2 coincidencias (modo estricto, no hizo clic). Con 1,5 s de pausa, 7 de 7 eligieron bien.",
+          "accion": "esperar",
+          "ms": 1500
+        },
+        {
           "_por_que": "Por TEXTO dentro de la lista, no 'el li': con el campo vacio la lista muestra 'Popular Instruments' (encabezado + 9 contratos) y filtra un instante despues de teclear (14:41: el clic en 'el li' choco con el modo estricto, 10 elementos, y no se hizo). NO exacto: la sugerencia es li > a > div con el texto 'M6EZ6' suelto y un div hijo 'E-Micro Euro' (medido en el DOM 14:43), asi que ningun elemento dice EXACTAMENTE el contrato. Si hubiera 2 coincidencias, el modo estricto no hace clic; y el paso siguiente verifica el campo.",
           "accion": "click_texto",
           "texto": "{contrato}",
           "exacto": false,
           "selector": "[data-testid='order-ticket-main-entry'] [data-testid='typeahead-wrapper'] ul.dropdown-menu"
+        },
+        {
+          "accion": "verificar",
+          "selector": "[data-testid='order-ticket-symbol-search']",
+          "igual": "{contrato}"
+        },
+        {
+          "_por_que": "LA LISTA SE VUELVE A ABRIR (FUTVAN4, 17/11/2026): la PRIMERA busqueda de un contrato despues de entrar llega tarde y, ~1-3 s despues de elegirlo, la lista de sugerencias se abre otra vez con ese contrato y queda abierta tapando Buy/Sell (dry run por Telegram cortado en el clic de Buy; reproducido con MNQZ6, MESZ6, MYMZ6, M2KZ6, MGCZ6 y M6AZ6; una pausa de 1,5 s antes de elegir NO alcanzo). Un SEGUNDO clic en el contrato la cierra (2 de 2: Buy y Sell libres 6 s, el campo sigue en el contrato). Si no se vuelve a abrir en 3 s (busquedas siguientes), no hace nada.",
+          "accion": "click_si_aparece",
+          "selector": "[data-testid='order-ticket-main-entry'] [data-testid='typeahead-wrapper'] ul.dropdown-menu",
+          "texto": "{contrato}",
+          "exacto": false,
+          "ms": 3000
         },
         {
           "accion": "verificar",

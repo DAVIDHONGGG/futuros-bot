@@ -511,8 +511,32 @@ Las cinco están en **un solo login** y comparten el perfil `perfiles/LUCID`.
   cantidad no es un número (`exigir_numero`). Medido en vivo: NET POS en el
   índice 2, la fila en 0 se lee como "ninguna". **FUTVAN5 tiene que hacer
   un dry run después del update**: la lectura es antes del clic.
-- En FUTVAN4 no se instaló todavía el listener ni la tarea programada, y no
-  hubo dry run por Telegram.
+- **Primer dry run por Telegram (17/11/2026, `MNQ buy 1 4 4 LUC1`):**
+  autologin, cuenta y Positions bien, pero se cortó en el clic de Buy del
+  ticket: la **lista de sugerencias del símbolo se había vuelto a abrir**
+  y lo tapaba. Medido con los pasos reales en el Edge de medición:
+  - La **primera búsqueda de un contrato después de entrar** llega tarde:
+    ~1–3 s después de elegirlo, la lista se abre otra vez con ese contrato
+    y queda abierta (MNQZ6, MESZ6, MYMZ6, M2KZ6, MGCZ6, M6AZ6). Una pausa
+    antes de elegir **no** alcanza. **Un segundo clic en el contrato la
+    cierra** (lo indicó el usuario; medido): `click_si_aparece` acepta
+    ahora `texto` (+ `exacto`), igual que `click_texto`, y espera 3 s.
+  - Con el campo vacío la lista trae las **búsquedas recientes** y
+    "Popular Instruments": el contrato puede estar dos veces y el clic a
+    ~1,7 s chocó con el modo estricto. Ahora hay 1,5 s de pausa entre
+    teclear y elegir (7 de 7 bien).
+  - Con los dos cambios, 4 de 4 dejaron Buy/Sell libres (leído con
+    `elementFromPoint`, sin clic), con contrato nuevo y repetido. El símbolo
+    tarda ~3,5 s si la lista se reabre y ~6,5 s si no (espera los 3 s).
+- **Dry run por Telegram con los arreglos (17/11/2026, chat privado):**
+  - `MNQ buy 1 4 4 LUC1`: autologin, ticket completo (MNQZ6, Buy, 1,
+    MARKET, TP/SL 4 ticks) y frenó antes de Send. 33 s del mensaje al
+    ticket, con el navegador y el autologin.
+  - `MNQ sell 1 4 4 LUC2`: **cambió a LUC2** (EQUITY de LUC2, Positions
+    vacío), Sell, ticket completo, frenó antes de Send. 19 s.
+  - **El bracket del ticket es por cuenta**: en LUC2 estaba apagado y el
+    bot lo prendió con `simple-tpsl-order-ticket-enable-tpsl-button`.
+- En FUTVAN4 no se instaló todavía el listener como tarea programada.
 
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 
