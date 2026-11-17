@@ -255,6 +255,12 @@ def validar_plataforma(nombre: str, datos: dict) -> list:
         for clave in ("panel", "filas", "cantidad"):
             if es_sin_configurar(posiciones.get(clave)):
                 problemas.append(f"'posiciones.{clave}' sin configurar")
+        # columna_cantidad y encabezados van juntos: uno sin el otro no sirve.
+        if ("columna_cantidad" in posiciones) != ("encabezados" in posiciones):
+            problemas.append("'posiciones.columna_cantidad' y 'posiciones.encabezados' van juntos")
+        for clave in ("columna_cantidad", "encabezados"):
+            if clave in posiciones and es_sin_configurar(posiciones[clave]):
+                problemas.append(f"'posiciones.{clave}' sin configurar")
         if "texto_fila" in posiciones:
             if es_sin_configurar(posiciones["texto_fila"]):
                 problemas.append("'posiciones.texto_fila' sin configurar")
@@ -468,7 +474,40 @@ def fila_de(page, conf: dict, buscado: str):
     return page.locator(conf["filas"]).filter(has_text=buscado)
 
 
-def leer_posiciones(page, conf: dict, buscado: str, timeout_ms: int) -> tuple:
+_FLECHAS_DE_ORDEN = re.compile("[▲▼▴▾↑↓]")
+
+
+def indice_de_columna(page, conf: dict, timeout_ms: int):
+    """Con posiciones.columna_cantidad (ej. "NET POS"): en que lugar esta esa
+    columna entre posiciones.encabezados, para leer la celda de ese mismo
+    lugar en cada fila (posiciones.cantidad = TODAS las celdas de la fila).
+    Sin columna_cantidad: None (se usa posiciones.cantidad tal cual).
+
+    Por que: en Tradovate las columnas no son fijas. Con varias cuentas en un
+    login (FUTVAN4, Lucid, 17/11/2026) aparece ACCOUNT en segundo lugar y
+    NET POS pasa al tercero; con una cuenta (FUTVAN5) NET POS es el segundo.
+    Las celdas no dicen de que columna son: solo el orden, que es el mismo
+    que el de los encabezados (medido, 8 y 8).
+
+    Levanta si la columna no esta o esta mas de una vez: leer "alguna"
+    columna no es aceptable.
+    """
+    nombre = conf.get("columna_cantidad")
+    if not nombre:
+        return None
+    # La columna por la que esta ordenada la tabla trae una flecha: medido
+    # "ACCOUNT ▼" en FUTVAN4 (17/11/2026). Se saca antes de comparar.
+    textos = [" ".join(_FLECHAS_DE_ORDEN.sub(" ", e.inner_text(timeout=timeout_ms)).split()).upper()
+              for e in page.locator(conf["encabezados"]).all()]
+    lugares = [i for i, t in enumerate(textos) if t == nombre.upper()]
+    if len(lugares) != 1:
+        raise ValueError(f"la columna {nombre!r} aparece {len(lugares)} veces entre los "
+                         f"encabezados del panel de posiciones {textos}")
+    return lugares[0]
+
+
+def leer_posiciones(page, conf: dict, buscado: str, timeout_ms: int,
+                    exigir_numero: bool = False) -> tuple:
     """Lo que dice el panel de posiciones sobre ESE contrato: la tupla
     ordenada de las cantidades de las filas que contienen `buscado` (ver
     texto_de_fila).
@@ -483,15 +522,33 @@ def leer_posiciones(page, conf: dict, buscado: str, timeout_ms: int) -> tuple:
 
     Levanta excepcion si el panel no esta a la vista: sin poder leerlo no hay
     forma de verificar, y quien llama decide que hacer (no hacer clic).
+
+    Con exigir_numero=True (la lectura de ANTES del clic) tambien levanta si
+    la celda de cantidad de una fila del contrato no es un numero: casi
+    seguro es OTRA columna. Medido en FUTVAN4 (Lucid, 17/11/2026): con la
+    columna ACCOUNT a la vista, `[role=gridcell] >> nth=1` leia la cuenta
+    ("LFE05089433290001") y no NET POS; la orden habria creido que "ya habia
+    posicion" y la verificacion de despues del clic habria fallado. Despues
+    del clic no se exige (frenar ahi no deshace nada, y una celda a medio
+    dibujar podria cortar una verificacion buena).
     """
     page.locator(conf["panel"]).wait_for(state="visible", timeout=timeout_ms)
+    columna = indice_de_columna(page, conf, timeout_ms)
     cantidades = []
     buscado = buscado.upper()
     for fila in page.locator(conf["filas"]).all():
         texto = fila.inner_text(timeout=timeout_ms)
         if buscado in texto.upper():
-            cantidad = fila.locator(conf["cantidad"]).first.inner_text(timeout=timeout_ms).strip()
-            if _numero(cantidad) == 0:
+            celda = fila.locator(conf["cantidad"])
+            celda = celda.first if columna is None else celda.nth(columna)
+            cantidad = celda.inner_text(timeout=timeout_ms).strip()
+            numero = _numero(cantidad)
+            if numero is None and exigir_numero:
+                raise ValueError(
+                    f"la celda de cantidad de la fila de {buscado} dice {cantidad!r}, que no es "
+                    f"un numero: 'posiciones' esta leyendo otra columna (revisar las columnas "
+                    f"del panel de posiciones)")
+            if numero == 0:
                 continue
             cantidades.append(cantidad)
     return tuple(sorted(cantidades))

@@ -5,6 +5,9 @@ Registra cada accion con el hilo que la hizo, para poder probar que todo
 pasa en el hilo del navegador, y deja simular lo que hace falta:
 
     pagina.posiciones = {"MNQZ6": "1"}      lo que muestra el panel
+    pagina.posiciones = {"MNQZ6": ["MNQZ6", "LFE...", "1"]}   la fila por celdas
+                                            (nth(i) de la celda = la i-esima)
+    pagina.encabezados = ["SYMBOL", ...]    lo que lee selector_encabezados
     pagina.efecto_clic = fn(pagina, sel)    que pasa al hacer clic (llenar)
     pagina.al_escribir = fn(sel, valor)     gancho (ej. pedir un stop)
     pagina.al_tecla = fn(pag, sel, tecla)   que pasa al apretar una tecla (Enter)
@@ -127,8 +130,19 @@ class LocatorFalso:
             raise ErrorFalso("no aparece el panel de posiciones")
 
     def all(self):
+        if self.selector == self.pagina.selector_encabezados:
+            self.pagina._reg("leer_encabezados", self.selector)
+            return [_TextoFalso(t) for t in self.pagina.encabezados]
         self.pagina._reg("leer_filas", self.selector)
         return [_FilaFalsa(self.pagina, c, q) for c, q in self.pagina.posiciones.items()]
+
+
+class _TextoFalso:
+    def __init__(self, texto):
+        self.texto = texto
+
+    def inner_text(self, timeout=None):
+        return self.texto
 
 
 class _FilaFalsa:
@@ -140,19 +154,28 @@ class _FilaFalsa:
         self.pagina, self.contrato, self.cantidad = pagina, contrato, cantidad
 
     def inner_text(self, timeout=None):
-        return f"{self.contrato}  {self.cantidad}  P&L {next(self._pnl)}.25"
+        celdas = self.cantidad if isinstance(self.cantidad, list) else [self.cantidad]
+        return f"{self.contrato}  {'  '.join(celdas)}  P&L {next(self._pnl)}.25"
 
     def locator(self, _selector):
         fila = self
 
         class _Celda:
-            first = None
+            def __init__(self, i=None):
+                self.i = i
+
+            @property
+            def first(self):
+                return _Celda(0) if isinstance(fila.cantidad, list) else self
+
+            def nth(self, i):
+                return _Celda(i)
 
             def inner_text(self, timeout=None):
+                if isinstance(fila.cantidad, list):
+                    return fila.cantidad[self.i]
                 return fila.cantidad
-        celda = _Celda()
-        celda.first = celda
-        return celda
+        return _Celda()
 
 
 class PaginaFalsa:
@@ -173,6 +196,8 @@ class PaginaFalsa:
         self.ocultos = set()       # selectores que nunca aparecen (wait_for falla)
         self.selector_sesion = "#ticket"
         self.selector_panel = "#posiciones"
+        self.encabezados = []
+        self.selector_encabezados = "#posiciones .encabezado"
         self.capturas = []
 
     def _reg(self, accion, selector=None, detalle=None):

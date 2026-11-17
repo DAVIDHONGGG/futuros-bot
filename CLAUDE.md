@@ -169,8 +169,9 @@ Todo lleva nombres propios a propósito:
   FUTVAN7, ver "PC FUTVAN7, 16/11/2026"). 331 tests en verde.
 - **Tradovate con varias cuentas en un login** desde el 16/11/2026 (PC
   FUTVAN4, Lucid, ver "PC FUTVAN4"): `pasos_seleccionar_cuenta` cambia de
-  cuenta en el desplegable. 347 tests en verde. Falta medir si el ticket y
-  Positions siguen a la cuenta elegida.
+  cuenta en el desplegable; el ticket y Positions siguen a la cuenta elegida
+  (orden real del operador, 17/11/2026). NET POS se busca por el nombre de
+  la columna. 359 tests en verde.
 - `telegram_allowed_user_id` en `config.json`: los mismos tres ids de Telegram
   que la flota de MT5 (lo confirmó el usuario).
 - **El bot va a correr en otra PC**, no en la de desarrollo. Ahí hay que
@@ -492,13 +493,26 @@ Las cinco están en **un solo login** y comparten el perfil `perfiles/LUCID`.
   ticket", "Risk settings"). El operador tiene que mover Positions a su
   propio panel y cerrar los carteles antes de la primera orden; si no, el
   bot falla sin operar.
-- **Sin medir todavía** (necesita una orden real mínima del operador):
-  - si el Order Ticket manda la orden a la cuenta elegida arriba;
-  - el interruptor S/A del panel Positions (¿cuenta elegida o todas?). Si
-    muestra todas, una posición de `LUC1` haría creer a una orden de `LUC2`
-    que "ya había posición".
-  - En FUTVAN4 no se instaló todavía el listener ni la tarea programada, y
-    no hubo dry run por Telegram.
+- **Orden real del operador (17/11/2026, Buy 1 MNQZ6 desde el Order
+  Ticket en LUC1):**
+  - **El ticket manda a la cuenta elegida arriba**: la fila quedó con
+    ACCOUNT `LFE05089433290001`.
+  - **Positions muestra solo la cuenta elegida**: con LUC2 elegida quedó
+    vacío y al volver a LUC1 reapareció la fila. No hace falta filtrar
+    por cuenta.
+  - El interruptor S/A está en la pestaña **Order Ticket** (sin medir qué
+    hace; queda en S). El de Positions cambia entre tabla y vista
+    **compacta**, que esconde los encabezados y **no sirve** para el bot.
+- **Con varias cuentas, Positions agrega la columna ACCOUNT** en segundo
+  lugar y NET POS pasa al tercero: el `nth=1` fijo leía la cuenta. Ahora
+  NET POS se busca **por el nombre de la columna** (`columna_cantidad` +
+  `encabezados` en `posiciones`), sin contar la flecha de orden
+  ("ACCOUNT ▼", medido). Y la lectura de **antes del clic** frena si la
+  cantidad no es un número (`exigir_numero`). Medido en vivo: NET POS en el
+  índice 2, la fila en 0 se lee como "ninguna". **FUTVAN5 tiene que hacer
+  un dry run después del update**: la lectura es antes del clic.
+- En FUTVAN4 no se instaló todavía el listener ni la tarea programada, y no
+  hubo dry run por Telegram.
 
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 

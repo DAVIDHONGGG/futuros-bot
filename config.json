@@ -307,7 +307,10 @@
       "posiciones": {
         "panel": "[role=grid]:has([role=columnheader]:has-text('NET POS'))",
         "filas": "[role=grid]:has([role=columnheader]:has-text('NET POS')) [role=row]:has([role=gridcell])",
-        "cantidad": "[role=gridcell] >> nth=1",
+        "_cantidad": "NET POS se busca por el NOMBRE de su columna (columna_cantidad entre los encabezados) y se lee la celda de ese mismo lugar: con varias cuentas en un login (FUTVAN4, Lucid, 17/11/2026) Tradovate agrega ACCOUNT en segundo lugar y NET POS pasa al tercero (antes era fijo nth=1 y leia la cuenta). Las celdas no dicen de que columna son; el orden es el de los encabezados (medido 8 y 8). La vista COMPACTA de Positions no sirve: esconde los encabezados. Un dry run lo prueba (la lectura es antes del clic).",
+        "cantidad": "[role=gridcell]",
+        "encabezados": "[role=grid]:has([role=columnheader]:has-text('NET POS')) [role=columnheader]",
+        "columna_cantidad": "NET POS",
         "texto_fila": "{contrato}"
       }
     },

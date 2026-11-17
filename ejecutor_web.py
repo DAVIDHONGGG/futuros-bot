@@ -293,7 +293,8 @@ class EjecutorWeb(EjecutorBase):
                                "seleccionar cuenta", pausa=pausa)
             try:
                 antes = leer_posiciones(page, plataforma["posiciones"],
-                                        texto_de_fila(plataforma["posiciones"], valores), to)
+                                        texto_de_fila(plataforma["posiciones"], valores), to,
+                                        exigir_numero=True)
             except OperacionAbortada:
                 raise
             except Exception as e:

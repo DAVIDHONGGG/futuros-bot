@@ -95,6 +95,143 @@ class TestCeroNoEsPosicion(unittest.TestCase):
         self.assertIn("[] -> ['1']", res.detalle)
 
 
+class TestCantidadQueNoEsNumero(unittest.TestCase):
+    """FUTVAN4 (Lucid, 17/11/2026): con la columna ACCOUNT a la vista,
+    'posiciones.cantidad' (nth=1) leia la cuenta y no NET POS."""
+
+    CUENTA = "LFE05089433290001"
+
+    def setUp(self):
+        self.pw = PlaywrightFalso()
+        self.pw.chromium.launch_persistent_context()
+        self.page = self.pw.pagina()
+        self.conf = FLOTA_PRUEBA["plataformas"]["tradovate"]["posiciones"]
+
+    def test_exigiendo_numero_levanta_y_nombra_lo_que_leyo(self):
+        self.page.posiciones = {"MNQZ6": self.CUENTA}
+        with self.assertRaises(ValueError) as e:
+            leer_posiciones(self.page, self.conf, "MNQZ6", 100, exigir_numero=True)
+        self.assertIn(self.CUENTA, str(e.exception))
+        self.assertIn("otra columna", str(e.exception))
+
+    def test_exigiendo_numero_los_numeros_pasan_igual(self):
+        self.page.posiciones = {"MNQZ6": "0"}
+        self.assertEqual(leer_posiciones(self.page, self.conf, "MNQZ6", 100, exigir_numero=True), ())
+        self.page.posiciones = {"MNQZ6": "-1"}
+        self.assertEqual(leer_posiciones(self.page, self.conf, "MNQZ6", 100, exigir_numero=True),
+                         ("-1",))
+
+    def test_solo_cuenta_la_fila_del_contrato(self):
+        # Otra fila con algo raro no frena una orden de otro contrato.
+        self.page.posiciones = {"M6EZ6": self.CUENTA}
+        self.assertEqual(leer_posiciones(self.page, self.conf, "MNQZ6", 100, exigir_numero=True), ())
+
+    def test_la_orden_no_hace_clic(self):
+        cfg = config_de_prueba(local=local_con(dry_run=False))
+
+        def preparar(pagina):
+            pagina.posiciones["MNQZ6"] = self.CUENTA
+        pw = PlaywrightFalso(preparar_pagina=preparar)
+        ej = EjecutorWeb(cfg, fabrica=fabrica(pw), dir_diagnosticos=dir_temporal())
+        self.addCleanup(ej.cerrar)
+        res = ej.colocar_lote([trabajo()])[0]
+        self.assertNotIn("#comprar", pw.clics())
+        self.assertIn("NO se hace clic", res.error)
+        self.assertIn(self.CUENTA, res.error)
+
+
+class TestCantidadPorNombreDeColumna(unittest.TestCase):
+    """NET POS se busca por el nombre de la columna: con varias cuentas en un
+    login aparece ACCOUNT y las columnas se corren (FUTVAN4, 17/11/2026)."""
+
+    CON_ACCOUNT = ["SYMBOL", "ACCOUNT", "NET POS", "BOUGHT", "SOLD", "NET PRICE",
+                   "OPEN P/L, $", "INIT. MARGIN"]
+    SIN_ACCOUNT = ["SYMBOL", "NET POS", "BOUGHT", "SOLD", "NET PRICE", "OPEN P/L, $",
+                   "INIT. MARGIN"]
+
+    def setUp(self):
+        self.pw = PlaywrightFalso()
+        self.pw.chromium.launch_persistent_context()
+        self.page = self.pw.pagina()
+        self.conf = dict(FLOTA_PRUEBA["plataformas"]["tradovate"]["posiciones"],
+                         cantidad=".celda", encabezados="#posiciones .encabezado",
+                         columna_cantidad="NET POS")
+
+    def leer(self, exigir=True):
+        return leer_posiciones(self.page, self.conf, "MNQZ6", 100, exigir_numero=exigir)
+
+    def test_con_account_lee_net_pos_y_no_la_cuenta(self):
+        # Lo medido: la fila de LUC1 despues de la orden del operador.
+        self.page.encabezados = self.CON_ACCOUNT
+        self.page.posiciones = {"MNQZ6": ["MNQZ6", "LFE05089433290001", "0", "1", "1", "",
+                                          "$0.00", "0.00"]}
+        self.assertEqual(self.leer(), ())
+        self.page.posiciones["MNQZ6"][2] = "1"
+        self.assertEqual(self.leer(), ("1",))
+
+    def test_sin_account_como_futvan5(self):
+        self.page.encabezados = self.SIN_ACCOUNT
+        self.page.posiciones = {"MNQZ6": ["MNQZ6", "-1", "0", "1", "", "$-3.00", "100.00"]}
+        self.assertEqual(self.leer(), ("-1",))
+
+    def test_el_encabezado_se_compara_sin_espacios_de_mas(self):
+        self.page.encabezados = ["SYMBOL", " net  pos\n", "BOUGHT"]
+        self.page.posiciones = {"MNQZ6": ["MNQZ6", "2", "2"]}
+        self.assertEqual(self.leer(), ("2",))
+
+    def test_la_flecha_de_orden_no_cuenta(self):
+        # Medido: la columna por la que se ordena dice "ACCOUNT ▼".
+        for flecha in ("▼", "▲"):
+            with self.subTest(flecha=flecha):
+                self.page.encabezados = ["SYMBOL", f"ACCOUNT {flecha}", f"NET POS {flecha}"]
+                self.page.posiciones = {"MNQZ6": ["MNQZ6", "LFE05089433290001", "-2"]}
+                self.assertEqual(self.leer(), ("-2",))
+
+    def test_sin_la_columna_o_repetida_levanta(self):
+        self.page.posiciones = {"MNQZ6": ["MNQZ6", "1"]}
+        for encabezados in ([], ["SYMBOL", "NET POSITION"], ["NET POS", "NET POS"]):
+            with self.subTest(encabezados=encabezados):
+                self.page.encabezados = encabezados
+                with self.assertRaises(ValueError):
+                    self.leer(exigir=False)
+
+    def test_la_orden_con_account_compra_y_confirma(self):
+        flota = copy.deepcopy(FLOTA_PRUEBA)
+        flota["plataformas"]["tradovate"]["posiciones"] = self.conf
+        cfg = config_de_prueba(flota=flota, local=local_con(dry_run=False))
+
+        def preparar(pagina):
+            pagina.encabezados = self.CON_ACCOUNT
+            pagina.posiciones["MNQZ6"] = ["MNQZ6", "LFE05089433290001", "0"]
+
+            def comprar(pag, selector):
+                if selector == "#comprar":
+                    pag.posiciones["MNQZ6"] = ["MNQZ6", "LFE05089433290001", "1"]
+            pagina.efecto_clic = comprar
+        pw = PlaywrightFalso(preparar_pagina=preparar)
+        ej = EjecutorWeb(cfg, fabrica=fabrica(pw), dir_diagnosticos=dir_temporal())
+        self.addCleanup(ej.cerrar)
+        res = ej.colocar_lote([trabajo()])[0]
+        self.assertIn("#comprar", pw.clics())
+        self.assertIs(res.confirmado, True)
+        self.assertIn("[] -> ['1']", res.detalle)
+
+    def test_validacion_van_juntos(self):
+        p = plataforma(verificar_despues=VERIFICAR_DESPUES)
+        p["posiciones"] = dict(p["posiciones"], columna_cantidad="NET POS")
+        self.assertTrue(any("van juntos" in x for x in validar_plataforma("x", p)))
+        p["posiciones"]["encabezados"] = "#posiciones .encabezado"
+        self.assertEqual(validar_plataforma("x", p), [])
+
+    def test_config_real_busca_net_pos_por_nombre(self):
+        flota = json.loads((RAIZ / "config.json").read_text(encoding="utf-8"))
+        pos = flota["plataformas"]["tradovate"]["posiciones"]
+        self.assertEqual(pos["columna_cantidad"], "NET POS")
+        self.assertEqual(pos["cantidad"], "[role=gridcell]")
+        self.assertTrue(pos["encabezados"].startswith(pos["panel"] + " "))
+        self.assertTrue(pos["filas"].startswith(pos["panel"] + " "))
+
+
 class TestMarcadoresDeLado(unittest.TestCase):
 
     def test_buy_y_sell_con_mayuscula(self):
