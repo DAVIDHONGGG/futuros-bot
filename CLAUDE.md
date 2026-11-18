@@ -570,7 +570,19 @@ Las cinco están en **un solo login** y comparten el perfil `perfiles/LUCID`.
     vacío), Sell, ticket completo, frenó antes de Send. 19 s.
   - **El bracket del ticket es por cuenta**: en LUC2 estaba apagado y el
     bot lo prendió con `simple-tpsl-order-ticket-enable-tpsl-button`.
-- En FUTVAN4 no se instaló todavía el listener como tarea programada.
+- **Tarea programada instalada (18/11/2026):** `bot-futuros listener`,
+  hecha igual que la `mt5-bot listener` de esta PC (que no se tocó):
+  `run_listener.bat auto` desde la carpeta del bot, usuario del operador en
+  sesión **interactiva** (la ventana de Edge se ve, `no_robar_foco: false`),
+  disparadores "al iniciar sesión" (1 min de demora) y vigilante cada 5 min,
+  `IgnoreNew`, sin límite de tiempo. No hay script de instalación en el
+  repo: se creó con `Register-ScheduledTask`.
+  - Al arrancar, Telegram entregó un `update` pendiente: `actualizar.ps1`
+    deshabilitó la tarea, paró el listener, "Ya estaba al dia", tests OK, y
+    lo volvió a levantar (uno solo). El update por Telegram queda probado
+    en FUTVAN4.
+  - No abrir `run_listener.bat` a mano con la tarea activa: dos listeners
+    se roban los mensajes.
 
 ### PC FUTVAN8: Tradeify en Tradovate (17/11/2026)
 
