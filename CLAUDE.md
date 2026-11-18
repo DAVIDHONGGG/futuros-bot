@@ -107,15 +107,32 @@ Por eso CUENTA, en la orden, puede ser **el alias o el número completo**
 
 - **Número de una cuenta configurada**: es esa cuenta. Si en la misma orden
   van el alias y su número, cuenta una sola vez.
-- **Número que no está en `cuentas`**: se arma con el molde
-  `cuenta_nueva` del `config.local.json`, con el número como alias:
-  `{"plataforma": "topstepx", "max_contratos": 50, "perfil": "perfiles/TOPSTEPX"}`.
-  - Es una clave local y el `perfil` es obligatorio (el del login de la
-    máquina).
-  - **Solo sirve con un login por máquina.** Con dos logins, el número no
-    dice qué perfil usar.
-- **Sin molde, un número nuevo se rechaza** ("cuenta desconocida", y el
-  mensaje dice que falta `cuenta_nueva`).
+- **Número que no está en `cuentas`: va al login de SU FIRMA.** Una van
+  puede tener sesión con varias firmas a la vez, y cambian con el tiempo.
+  - **`firmas`** (`config.json`, flota) dice de qué firma es un número, por
+    cómo empieza, y en qué plataforma se opera. Lo dio el usuario: `LFE` =
+    Lucid, `MFF` = MFF, y Topstep **sin prefijo**: se queda con lo que no
+    empiece como ninguna otra, y puede haber una sola firma así.
+  - **Tradeify va con `FTDFY`**, no con el `FTDY` que dijo el usuario. Es lo
+    medido en FUTVAN8 (`FTDFYSLX50527729629`). `TDFYU…` es el id de
+    Tradeify, no el número de Tradovate.
+  - Dos comienzos que se pisan (`MFF` y `MFFU`) se rechazan con advertencia.
+  - **`logins`** (`config.local.json`) dice con qué firmas tiene sesión esa
+    van: una entrada por firma, con el `perfil` (obligatorio) y
+    `max_contratos`. Ejemplo:
+    `{"lucid": {"perfil": "perfiles/LUCID", "max_contratos": 1}}`.
+  - Con eso **no hace falta anotar cada cuenta**: los alias quedan como
+    atajo opcional.
+  - **Un solo login por firma y por van.** Dos usuarios de Lucid en la misma
+    van no se distinguen por el comienzo del número.
+  - Dos firmas en la misma van abren dos navegadores, uno por perfil.
+    **TODO, sin medir:** dos sesiones de Tradovate a la vez, con usuarios
+    distintos, en la misma PC.
+- **Número de una firma sin login en esa van**: se rechaza, y el mensaje
+  dice por qué ("es de mff y esta van no tiene login de mff").
+- `cuenta_nueva` (el primer molde, de un solo login) **se reemplazó por
+  `logins`**. Si alguna van lo tiene, el bot avisa que se saque.
+- `abrir_perfil.py LUCID` abre el login de esa firma.
 - **Qué se toma como número**: algo con un tramo de 5 dígitos
   (`NUMERO_DE_CUENTA` en `config.py`). Así un alias mal escrito (`TOP6`)
   sigue siendo "desconocida" y no se toma por una cuenta nueva.
@@ -123,7 +140,7 @@ Por eso CUENTA, en la orden, puede ser **el alias o el número completo**
   plataforma por ese número y la verifica antes del clic. Si no existe,
   falla ahí.
 - **`all` y `close all` son solo las cuentas de `cuentas`.** Una cuenta que
-  entró por el molde no se suma. Para operar todas las del Excel, el código
+  entró por su login no se suma. Para operar todas las del Excel, el código
   manda los números separados por coma.
 - **Mayúsculas:** el número se pasa a mayúsculas. Todos los medidos lo son
   (TopstepX `668214-…`, Lucid `LFE…`, Tradeify `FTDFY…`, MFF `MFFU…`).

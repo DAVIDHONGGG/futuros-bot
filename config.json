@@ -26,6 +26,14 @@
     "MES": 1.25,
     "M6E": 1.25
   },
+  "_firmas": "De que firma es un NUMERO de cuenta (por como empieza) y en que plataforma se opera. Lo dio el usuario el 18/11/2026: LFE = Lucid, MFF = My Funded Futures, Tradeify con su prefijo (ver _tradeify), y Topstep sin prefijo (sus numeros son '668214-...'): se queda con lo que no empiece como ninguna otra. Cada van dice en config.local.json ('logins') con que firmas tiene sesion. Dos comienzos que se pisan se rechazan.",
+  "_tradeify": "El usuario dijo 'FTDY', pero el numero MEDIDO en FUTVAN8 (17/11/2026, el que muestra Tradovate) es FTDFYSLX50527729629: empieza con FTDFY. Se usa lo medido; si hay cuentas de Tradeify que empiecen con FTDY, cambiar a 'FTD'. OJO: TDFYU175192319 es el id de Tradeify, NO el numero de Tradovate; no sirve en la orden.",
+  "firmas": {
+    "lucid": {"plataforma": "tradovate", "cuentas_empiezan_con": "LFE"},
+    "tradeify": {"plataforma": "tradovate", "cuentas_empiezan_con": "FTDFY"},
+    "mff": {"plataforma": "tradovate", "cuentas_empiezan_con": "MFF"},
+    "topstep": {"plataforma": "topstepx", "cuentas_empiezan_con": null}
+  },
   "_plataformas": "Una entrada por terminal web. Lo que dice TODO no esta configurado y el bot se NIEGA a operar en esa plataforma (no adivina selectores). Los selectores son de Playwright: CSS, text=..., role=button[name=\"...\"]. Se sacan con: python -m playwright codegen --user-data-dir perfiles\\ALIAS <url>. 'simbolos' traduce la raiz de Telegram al contrato de ESA plataforma y cambia en cada vencimiento: revisala en cada roll.",
   "plataformas": {
     "tradovate": {

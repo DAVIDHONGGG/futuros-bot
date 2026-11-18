@@ -86,12 +86,17 @@ def revisar_config(config):
                  ", ".join(str(i) for i in autorizados)
                  + "  <- todos pueden operar de verdad")
 
-    if not config.cuentas:
-        _chequeo(AVISO, "No hay cuentas configuradas",
-                 'Agrega "cuentas" en config.local.json (ver config.example.json).')
-    else:
+    if not config.cuentas and not config.logins:
+        _chequeo(AVISO, "No hay cuentas ni logins configurados",
+                 'Agrega "logins" (o "cuentas") en config.local.json (ver config.example.json).')
+    if config.cuentas:
         _chequeo(OK, f"Cuentas: {', '.join(sorted(config.cuentas))}",
                  f"por defecto: {config.cuenta_por_defecto or '- (hay que nombrarla en cada orden)'}")
+    if config.logins:
+        firmas = config.firmas
+        _chequeo(OK, f"Logins: {', '.join(sorted(config.logins))}",
+                 "numeros que empiezan con " + ", ".join(
+                     f"{firmas[f]['prefijo'] or '(el resto)'} -> {f}" for f in sorted(config.logins)))
 
     for advertencia in config.advertencias:
         _chequeo(AVISO, "Config", advertencia)

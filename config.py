@@ -84,7 +84,8 @@ CLAVES_LOCALES = frozenset({
     "cuenta_por_defecto",
     "no_robar_foco",
     "max_riesgo_usd",             # tope de riesgo por cuenta y por orden
-    "cuenta_nueva",               # molde para un numero de cuenta no configurado
+    "logins",                     # con que firmas tiene sesion esta van
+    "cuenta_nueva",               # reemplazada por "logins": solo avisa que se saque
 })
 
 # Un numero de cuenta de la plataforma, escrito en la orden en vez del alias
@@ -198,8 +199,9 @@ class Config:
 
         self.valores = valores
         self._cuentas = self._validar_cuentas()
-        self._molde = self._validar_molde()
-        self._cuentas_nuevas = {}   # numero -> Cuenta armada con el molde
+        self._firmas = self._validar_firmas()
+        self._logins = self._validar_logins()
+        self._cuentas_nuevas = {}   # numero -> Cuenta armada con el login de su firma
         _ = self.max_riesgo_usd     # deja la advertencia si el valor es invalido
 
     # --- carga --------------------------------------------------------------
@@ -300,44 +302,116 @@ class Config:
             )
         return cuentas
 
-    def _validar_molde(self):
-        """"cuenta_nueva": como operar un NUMERO de cuenta que no esta en
-        "cuentas" (la que reemplaza a una que murio). Sirve cuando la maquina
-        tiene un solo login: {"plataforma": "topstepx", "max_contratos": 50,
-        "perfil": "perfiles/TOPSTEPX"}. El perfil es obligatorio: sin el, cada
-        numero abriria un perfil vacio, sin sesion. None = sin molde (un
-        numero desconocido se rechaza, como antes)."""
-        datos = self.get("cuenta_nueva")
-        if datos is None:
-            return None
-        problema = None
-        if not isinstance(datos, dict):
-            problema = "tiene que ser un objeto con plataforma, max_contratos y perfil"
-        else:
-            plataforma = str(datos.get("plataforma", "")).strip().lower()
-            maximo = datos.get("max_contratos")
-            if plataforma not in self.plataformas:
-                problema = f"plataforma {plataforma!r} desconocida"
-            elif isinstance(maximo, bool) or not isinstance(maximo, int) or maximo < 1:
-                problema = f"max_contratos tiene que ser un entero >= 1, no {maximo!r}"
-            elif es_sin_configurar(datos.get("perfil")):
-                problema = ("falta 'perfil' (el del login de esta maquina, por ejemplo "
-                            "perfiles/TOPSTEPX)")
-        if problema:
+    def _validar_firmas(self) -> dict:
+        """"firmas" de config.json (FLOTA): de que firma es cada numero de
+        cuenta, por como EMPIEZA, y en que plataforma se opera.
+
+            {"lucid": {"plataforma": "tradovate", "cuentas_empiezan_con": "LFE"},
+             "topstep": {"plataforma": "topstepx", "cuentas_empiezan_con": null}}
+
+        Una firma sin comienzo (Topstep: sus numeros son "668214-...") se queda
+        con los numeros que no empiezan como ninguna otra; puede haber UNA sola.
+        Dos comienzos que se pisan ("MFF" y "MFFU") harian ambiguo un numero:
+        la segunda firma se descarta con una advertencia.
+        -> {nombre: {"plataforma": str, "prefijo": str | None}}
+        """
+        crudas = self.get("firmas") or {}
+        if not isinstance(crudas, dict):
+            self.advertencias.append("'firmas' no es un objeto JSON; no hay firmas.")
+            return {}
+        firmas, sin_prefijo = {}, None
+        for nombre_crudo, datos in crudas.items():
+            nombre = str(nombre_crudo).strip().lower()
+            problema = None
+            if not isinstance(datos, dict):
+                problema = "tiene que ser un objeto con plataforma y cuentas_empiezan_con"
+            else:
+                plataforma = str(datos.get("plataforma", "")).strip().lower()
+                prefijo = datos.get("cuentas_empiezan_con")
+                prefijo = None if es_sin_configurar(prefijo) else str(prefijo).strip().upper()
+                if plataforma not in self.plataformas:
+                    problema = f"plataforma {plataforma!r} desconocida"
+                elif prefijo is None and sin_prefijo is not None:
+                    problema = (f"ya hay una firma sin cuentas_empiezan_con ({sin_prefijo}); "
+                                f"puede haber una sola")
+                elif prefijo is not None:
+                    pisa = [f for f, d in firmas.items() if d["prefijo"] and (
+                        d["prefijo"].startswith(prefijo) or prefijo.startswith(d["prefijo"]))]
+                    if pisa:
+                        problema = (f"su comienzo {prefijo!r} se pisa con el de {pisa[0]} "
+                                    f"({firmas[pisa[0]]['prefijo']!r})")
+            if problema:
+                self.advertencias.append(f"Firma {nombre_crudo!r} descartada: {problema}.")
+                continue
+            if prefijo is None:
+                sin_prefijo = nombre
+            firmas[nombre] = {"plataforma": plataforma, "prefijo": prefijo}
+        return firmas
+
+    def _validar_logins(self) -> dict:
+        """"logins" de config.local.json: con que firmas tiene sesion ESTA van.
+        Una entrada por firma, con el perfil del navegador donde esta ese
+        login y el tope de contratos por orden:
+
+            {"lucid": {"perfil": "perfiles/LUCID", "max_contratos": 1},
+             "topstep": {"perfil": "perfiles/TOPSTEPX", "max_contratos": 50}}
+
+        Con esto no hace falta anotar cada cuenta: un numero se opera en el
+        login de su firma. El perfil es obligatorio: sin el, el bot abriria
+        un navegador sin sesion. Un solo login por firma (dos logins de Lucid
+        en la misma van no se distinguen por el comienzo del numero).
+        -> {firma: {"plataforma", "max_contratos", "perfil"}}
+        """
+        crudos = self.get("logins") or {}
+        if not isinstance(crudos, dict):
+            self.advertencias.append("'logins' no es un objeto JSON; no hay logins.")
+            return {}
+        logins = {}
+        for nombre_crudo, datos in crudos.items():
+            firma = str(nombre_crudo).strip().lower()
+            problema = None
+            if firma not in self._firmas:
+                problema = (f"firma desconocida (las de config.json: "
+                            f"{', '.join(sorted(self._firmas)) or 'ninguna'})")
+            elif not isinstance(datos, dict):
+                problema = "tiene que ser un objeto con perfil y max_contratos"
+            else:
+                maximo = datos.get("max_contratos")
+                if isinstance(maximo, bool) or not isinstance(maximo, int) or maximo < 1:
+                    problema = f"max_contratos tiene que ser un entero >= 1, no {maximo!r}"
+                elif es_sin_configurar(datos.get("perfil")):
+                    problema = ("falta 'perfil' (la carpeta donde esta el login de esa "
+                                "firma, por ejemplo perfiles/LUCID)")
+            if problema:
+                self.advertencias.append(
+                    f"Login {nombre_crudo!r} descartado: {problema}. Sus numeros de "
+                    f"cuenta se van a rechazar.")
+                continue
+            perfil = Path(datos["perfil"])
+            if not perfil.is_absolute():
+                perfil = self.base_dir / perfil
+            logins[firma] = {"plataforma": self._firmas[firma]["plataforma"],
+                             "max_contratos": maximo, "perfil": perfil}
+        if self.get("cuenta_nueva") is not None:
             self.advertencias.append(
-                f"'cuenta_nueva' descartada: {problema}. Un numero de cuenta que no "
-                f"este en 'cuentas' se va a rechazar.")
-            return None
-        perfil = Path(datos["perfil"])
-        if not perfil.is_absolute():
-            perfil = self.base_dir / perfil
-        return {"plataforma": plataforma, "max_contratos": maximo, "perfil": perfil}
+                "'cuenta_nueva' ya no se usa: se reemplazo por 'logins' (una entrada "
+                "por firma, ver config.example.json). Sacala de config.local.json.")
+        return logins
+
+    def firma_de(self, numero: str):
+        """La firma de un numero de cuenta, por como empieza; None si no se
+        puede saber. Sin coincidencia, la firma sin comienzo (Topstep)."""
+        numero = str(numero).strip().upper()
+        for nombre, datos in self._firmas.items():
+            if datos["prefijo"] and numero.startswith(datos["prefijo"]):
+                return nombre
+        return next((n for n, d in self._firmas.items() if d["prefijo"] is None), None)
 
     def cuenta(self, clave):
         """La Cuenta que nombra una orden, por ALIAS o por el NUMERO completo de
-        la plataforma (cuenta_plataforma). Un numero que no esta en "cuentas"
-        se arma con el molde "cuenta_nueva", con el numero como alias.
-        None = desconocida.
+        la plataforma. Un numero que no esta en "cuentas" se opera en el login
+        de su firma ("logins"), con el numero como alias. None = desconocida
+        (motivo_desconocida dice por que).
 
         Seguro ante un numero mal escrito: el bot elige esa cuenta en la
         plataforma y la VERIFICA antes del clic; si no existe, no opera.
@@ -354,16 +428,30 @@ class Config:
                 return c
         if clave in self._cuentas_nuevas:
             return self._cuentas_nuevas[clave]
-        if self._molde is None:
+        login = self._logins.get(self.firma_de(clave))
+        if login is None:
             return None
-        nueva = Cuenta(alias=clave, cuenta_plataforma=clave, **self._molde)
+        nueva = Cuenta(alias=clave, cuenta_plataforma=clave, **login)
         self._cuentas_nuevas[clave] = nueva
         return nueva
 
+    def motivo_desconocida(self, clave) -> str:
+        """Por que cuenta() no encontro esa cuenta, para el mensaje."""
+        clave = str(clave).strip().upper()
+        if not NUMERO_DE_CUENTA.match(clave):
+            return "no es un alias configurado ni un numero de cuenta"
+        firma = self.firma_de(clave)
+        if firma is None:
+            return "no se sabe de que firma es (revisa 'firmas' en config.json)"
+        return f"es de {firma} y esta van no tiene login de {firma} ('logins')"
+
     @property
-    def cuenta_nueva(self):
-        """El molde validado (o None), para mostrarlo."""
-        return None if self._molde is None else dict(self._molde)
+    def firmas(self) -> dict:
+        return {n: dict(d) for n, d in self._firmas.items()}
+
+    @property
+    def logins(self) -> dict:
+        return {n: dict(d) for n, d in self._logins.items()}
 
     # --- acceso -------------------------------------------------------------
 
@@ -632,12 +720,13 @@ def imprimir_efectiva(config: "Config", salida=None):
     for alias, c in sorted(config.cuentas.items()):
         print(f"  cuenta {alias}: {c.plataforma}, max {c.max_contratos} contrato(s), "
               f"perfil {c.perfil}, numero {c.cuenta_plataforma or '-'}", file=salida)
-    molde = config.cuenta_nueva
-    if molde:
-        print(f"  cuenta_nueva (numero no configurado): {molde['plataforma']}, max "
-              f"{molde['max_contratos']} contrato(s), perfil {molde['perfil']}", file=salida)
-    else:
-        print("  cuenta_nueva: - (un numero que no este en 'cuentas' se rechaza)", file=salida)
+    firmas = config.firmas
+    for firma, login in sorted(config.logins.items()):
+        empieza = firmas[firma]["prefijo"] or "(lo que no sea de otra firma)"
+        print(f"  login {firma}: numeros {empieza}..., {login['plataforma']}, max "
+              f"{login['max_contratos']} contrato(s), perfil {login['perfil']}", file=salida)
+    if not config.logins:
+        print("  logins: - (un numero que no este en 'cuentas' se rechaza)", file=salida)
     if config.advertencias:
         print("ADVERTENCIAS:", file=salida)
         for a in config.advertencias:

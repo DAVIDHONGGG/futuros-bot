@@ -4,6 +4,7 @@ login a mano. El bot nunca maneja contrasenas: usa la sesion que queda
 guardada en el perfil (perfiles/ALIAS, o el "perfil" de la cuenta).
 
     python abrir_perfil.py TS1
+    python abrir_perfil.py LUCID      (el login de una firma, ver "logins")
 
 Se niega si el listener esta corriendo: un perfil de Chromium no se puede
 abrir desde dos procesos, y el listener lo usa para operar. Pararlo antes:
@@ -18,7 +19,7 @@ Despues se vuelve a levantar el listener.
 import subprocess
 import sys
 
-from config import es_sin_configurar
+from config import Cuenta, es_sin_configurar
 import ejecutor_web
 from ejecutor_web import ARGS_SIN_FRENOS
 
@@ -82,9 +83,14 @@ def main(argv=None, config=None, fabrica=None, corriendo=None) -> int:
         return 2
     alias = argv[0].strip().upper()
     cuenta = config.cuenta(alias)      # alias o numero completo de la cuenta
+    login = config.logins.get(alias.lower())
+    if cuenta is None and login is not None:
+        # El login de una firma: "python abrir_perfil.py LUCID".
+        cuenta = Cuenta(alias=alias, **login)
     if cuenta is None:
         print(f"Cuenta {alias} desconocida. Configuradas: "
-              f"{', '.join(sorted(config.cuentas)) or 'ninguna'} (config.local.json).")
+              f"{', '.join(sorted(config.cuentas)) or 'ninguna'}; logins: "
+              f"{', '.join(sorted(config.logins)) or 'ninguno'} (config.local.json).")
         return 1
     if (corriendo or listener_corriendo)():
         print("El listener esta corriendo y usa los perfiles. Paralo primero "

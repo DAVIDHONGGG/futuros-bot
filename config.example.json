@@ -23,8 +23,8 @@
   "_max_riesgo_usd": "Tope de riesgo en USD por cuenta y por orden: SL_TICKS x valor del tick (valor_tick en config.json) x CONTRATOS. Una orden que lo supera se rechaza entera. Con 'all' vale para CADA cuenta. null = sin tope.",
   "max_riesgo_usd": null,
 
-  "_cuenta_nueva": "Opcional. En la orden, CUENTA puede ser el alias o el NUMERO completo de la cuenta en la plataforma (el mismo de cuenta_plataforma). Un numero que NO este en 'cuentas' (la que reemplaza a una que murio) se opera con este molde, sin tocar nada: {\"plataforma\": \"topstepx\", \"max_contratos\": 50, \"perfil\": \"perfiles/TOPSTEPX\"}. Solo sirve si la maquina tiene UN login: el perfil es el de ese login. El bot elige la cuenta en la plataforma y la verifica antes del clic; si el numero esta mal escrito, no opera. null = un numero desconocido se rechaza.",
-  "cuenta_nueva": null,
+  "_logins": "Con que FIRMAS tiene sesion esta van: una entrada por firma (las de 'firmas' en config.json: lucid, tradeify, mff, topstep), con el perfil del navegador donde esta ese login y el tope de contratos por orden. En la orden, CUENTA puede ser el NUMERO completo de la cuenta: el bot saca la firma de como empieza el numero (LFE = Lucid...) y lo opera en el login de esa firma, sin anotar cada cuenta. Una cuenta nueva (la que reemplaza a una que murio) funciona sola. El bot elige la cuenta en la plataforma y la verifica antes del clic; si el numero esta mal escrito, no opera. Ejemplo: {\"lucid\": {\"perfil\": \"perfiles/LUCID\", \"max_contratos\": 1}, \"topstep\": {\"perfil\": \"perfiles/TOPSTEPX\", \"max_contratos\": 50}}. Un solo login por firma.",
+  "logins": {},
 
   "_no_robar_foco": "Vive en config.json (true). Solo ponelo aca en false si ESTA maquina no corre el bot de MT5 y queres ver el navegador."
 }

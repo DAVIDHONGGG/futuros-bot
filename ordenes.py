@@ -15,9 +15,11 @@ Una linea de orden (ya sin el prefijo de la maquina):
     MNQ buy 1 40 80 668214-39660124 -> por el NUMERO completo de la cuenta
 
 CUENTA puede ser el alias o el numero completo de la cuenta en la plataforma
-(cuenta_plataforma). Un numero que no esta en "cuentas" se opera con el
-molde "cuenta_nueva" de la maquina: asi, si una cuenta muere y la reemplaza
-otra, alcanza con mandar el numero nuevo (ver Config.cuenta).
+(cuenta_plataforma). Un numero que no esta en "cuentas" se opera en el login
+de su FIRMA: la firma sale de como empieza el numero ("firmas" en
+config.json: LFE = Lucid...) y el login de la van ("logins" en
+config.local.json). Asi, si una cuenta muere y la reemplaza otra, alcanza
+con mandar el numero nuevo (ver Config.cuenta).
 
 CONTRATOS, SL_TICKS y TP_TICKS son enteros estrictos: "1.0" o "1,5" se
 rechazan en vez de redondearse. Un contrato de futuros no se fracciona, y
@@ -201,7 +203,7 @@ def resolver_cuentas(spec: str | None, config) -> list:
         return list(cuentas)
     # Cada parte es un alias o el numero completo de la plataforma: los dos
     # llevan a la misma cuenta (y se cuenta una vez). Un numero que no esta
-    # configurado usa el molde "cuenta_nueva", con el numero como alias.
+    # configurado se opera en el login de su firma, con el numero como alias.
     aliases, desconocidas = [], []
     for a in spec.split(","):
         a = a.strip().upper()
@@ -214,12 +216,11 @@ def resolver_cuentas(spec: str | None, config) -> list:
         elif cuenta.alias not in aliases:
             aliases.append(cuenta.alias)
     if desconocidas:
-        nuevas = ("" if config.cuenta_nueva else
-                  " Para operar un numero de cuenta que no este configurado, la "
-                  "maquina necesita 'cuenta_nueva' en config.local.json.")
+        motivos = "; ".join(f"{a}: {config.motivo_desconocida(a)}" for a in desconocidas)
         raise ValueError(
-            f"Cuenta(s) desconocida(s) en esta maquina: {', '.join(desconocidas)} "
-            f"(configuradas: {', '.join(sorted(cuentas)) or 'ninguna'}).{nuevas}")
+            f"Cuenta(s) desconocida(s) en esta maquina ({motivos}). Alias "
+            f"configurados: {', '.join(sorted(cuentas)) or 'ninguno'}; logins: "
+            f"{', '.join(sorted(config.logins)) or 'ninguno'}.")
     return aliases
 
 
