@@ -12,6 +12,12 @@ Una linea de orden (ya sin el prefijo de la maquina):
     MNQ buy 1 40 80 TS1,TV2        -> esas dos (sin espacios)
     MNQ buy 1 40 80 all            -> todas las cuentas de esta maquina
     MNQ sell 2 30 60 TS1 14:30     -> esa cuenta, a las 14:30 (hora local)
+    MNQ buy 1 40 80 668214-39660124 -> por el NUMERO completo de la cuenta
+
+CUENTA puede ser el alias o el numero completo de la cuenta en la plataforma
+(cuenta_plataforma). Un numero que no esta en "cuentas" se opera con el
+molde "cuenta_nueva" de la maquina: asi, si una cuenta muere y la reemplaza
+otra, alcanza con mandar el numero nuevo (ver Config.cuenta).
 
 CONTRATOS, SL_TICKS y TP_TICKS son enteros estrictos: "1.0" o "1,5" se
 rechazan en vez de redondearse. Un contrato de futuros no se fracciona, y
@@ -175,8 +181,10 @@ def agrupar_por_hora(ordenes: list) -> dict:
 def resolver_cuentas(spec: str | None, config) -> list:
     """El campo CUENTA -> lista de alias de cuentas de ESTA maquina.
 
-    None -> la cuenta por defecto; "all" -> todas; "TS1,TV2" -> esas. Un
-    alias desconocido es un error: operar en "la que este" no es una opcion.
+    None -> la cuenta por defecto; "all" -> todas (las configuradas); "TS1,TV2"
+    -> esas. Cada una puede ser el alias o el NUMERO completo de la cuenta en
+    la plataforma ("668214-39660124"). Un alias desconocido es un error:
+    operar en "la que este" no es una opcion.
     """
     cuentas = config.cuentas
     if not spec:
@@ -191,16 +199,27 @@ def resolver_cuentas(spec: str | None, config) -> list:
         if not cuentas:
             raise ValueError("Esta maquina no tiene cuentas configuradas.")
         return list(cuentas)
-    aliases = []
+    # Cada parte es un alias o el numero completo de la plataforma: los dos
+    # llevan a la misma cuenta (y se cuenta una vez). Un numero que no esta
+    # configurado usa el molde "cuenta_nueva", con el numero como alias.
+    aliases, desconocidas = [], []
     for a in spec.split(","):
         a = a.strip().upper()
-        if a and a not in aliases:
-            aliases.append(a)
-    desconocidas = [a for a in aliases if a not in cuentas]
+        if not a:
+            continue
+        cuenta = config.cuenta(a)
+        if cuenta is None:
+            if a not in desconocidas:
+                desconocidas.append(a)
+        elif cuenta.alias not in aliases:
+            aliases.append(cuenta.alias)
     if desconocidas:
+        nuevas = ("" if config.cuenta_nueva else
+                  " Para operar un numero de cuenta que no este configurado, la "
+                  "maquina necesita 'cuenta_nueva' en config.local.json.")
         raise ValueError(
             f"Cuenta(s) desconocida(s) en esta maquina: {', '.join(desconocidas)} "
-            f"(configuradas: {', '.join(sorted(cuentas)) or 'ninguna'}).")
+            f"(configuradas: {', '.join(sorted(cuentas)) or 'ninguna'}).{nuevas}")
     return aliases
 
 
@@ -243,7 +262,7 @@ def expandir_orden(orden: dict, config) -> list:
             f"contrato(s)) supera el maximo de {usd(tope)} USD.")
     trabajos = []
     for alias in resolver_cuentas(orden.get("cuenta"), config):
-        cuenta = config.cuentas[alias]
+        cuenta = config.cuenta(alias)
         if orden["contratos"] > cuenta.max_contratos:
             raise ValueError(
                 f"{alias}: {orden['contratos']} contrato(s) supera el maximo de "

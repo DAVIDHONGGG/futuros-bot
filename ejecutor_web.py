@@ -254,7 +254,7 @@ class EjecutorWeb(EjecutorBase):
 
     def _colocar_una(self, trabajo: dict, etiqueta: str) -> ResultadoOrden:
         alias = trabajo["cuenta"]
-        cuenta = self.config.cuentas.get(alias)
+        cuenta = self.config.cuenta(alias)
         if cuenta is None:
             raise ValueError(f"cuenta {alias} desconocida en esta maquina")
         nombre_plataforma = cuenta.plataforma
@@ -444,7 +444,7 @@ class EjecutorWeb(EjecutorBase):
         limite = time.monotonic() + self.opciones["segundos_verificacion"]
         to = self.opciones["timeout_ms"]
         conf = plataforma["posiciones"]
-        buscado = texto_de_fila(conf, valores_de(trabajo, self.config.cuentas.get(trabajo["cuenta"])))
+        buscado = texto_de_fila(conf, valores_de(trabajo, self.config.cuenta(trabajo["cuenta"])))
         despues = antes
         while True:
             despues = leer_posiciones(page, conf, buscado, to)

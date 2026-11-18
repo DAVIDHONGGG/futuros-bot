@@ -81,7 +81,7 @@ def main(argv=None, config=None, fabrica=None, corriendo=None) -> int:
         print(__doc__)
         return 2
     alias = argv[0].strip().upper()
-    cuenta = config.cuentas.get(alias)
+    cuenta = config.cuenta(alias)      # alias o numero completo de la cuenta
     if cuenta is None:
         print(f"Cuenta {alias} desconocida. Configuradas: "
               f"{', '.join(sorted(config.cuentas)) or 'ninguna'} (config.local.json).")

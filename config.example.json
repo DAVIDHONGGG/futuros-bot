@@ -23,5 +23,8 @@
   "_max_riesgo_usd": "Tope de riesgo en USD por cuenta y por orden: SL_TICKS x valor del tick (valor_tick en config.json) x CONTRATOS. Una orden que lo supera se rechaza entera. Con 'all' vale para CADA cuenta. null = sin tope.",
   "max_riesgo_usd": null,
 
+  "_cuenta_nueva": "Opcional. En la orden, CUENTA puede ser el alias o el NUMERO completo de la cuenta en la plataforma (el mismo de cuenta_plataforma). Un numero que NO este en 'cuentas' (la que reemplaza a una que murio) se opera con este molde, sin tocar nada: {\"plataforma\": \"topstepx\", \"max_contratos\": 50, \"perfil\": \"perfiles/TOPSTEPX\"}. Solo sirve si la maquina tiene UN login: el perfil es el de ese login. El bot elige la cuenta en la plataforma y la verifica antes del clic; si el numero esta mal escrito, no opera. null = un numero desconocido se rechaza.",
+  "cuenta_nueva": null,
+
   "_no_robar_foco": "Vive en config.json (true). Solo ponelo aca en false si ESTA maquina no corre el bot de MT5 y queres ver el navegador."
 }

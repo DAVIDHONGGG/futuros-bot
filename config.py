@@ -84,7 +84,14 @@ CLAVES_LOCALES = frozenset({
     "cuenta_por_defecto",
     "no_robar_foco",
     "max_riesgo_usd",             # tope de riesgo por cuenta y por orden
+    "cuenta_nueva",               # molde para un numero de cuenta no configurado
 })
+
+# Un numero de cuenta de la plataforma, escrito en la orden en vez del alias
+# ("668214-39660124", "LFE05089433290001"). Se exige un tramo de 5 digitos:
+# asi un alias mal escrito ("TOP6") sigue siendo "cuenta desconocida" y no se
+# confunde con una cuenta nueva.
+NUMERO_DE_CUENTA = re.compile(r"^(?=.*\d{5})[A-Z0-9][A-Z0-9_-]{4,29}$")
 
 # Un alias de cuenta no puede ser una de estas palabras: se confundiria con
 # un comando ("close all", "stop") o con la accion de la orden.
@@ -191,6 +198,8 @@ class Config:
 
         self.valores = valores
         self._cuentas = self._validar_cuentas()
+        self._molde = self._validar_molde()
+        self._cuentas_nuevas = {}   # numero -> Cuenta armada con el molde
         _ = self.max_riesgo_usd     # deja la advertencia si el valor es invalido
 
     # --- carga --------------------------------------------------------------
@@ -290,6 +299,71 @@ class Config:
                 else str(cuenta_plataforma),
             )
         return cuentas
+
+    def _validar_molde(self):
+        """"cuenta_nueva": como operar un NUMERO de cuenta que no esta en
+        "cuentas" (la que reemplaza a una que murio). Sirve cuando la maquina
+        tiene un solo login: {"plataforma": "topstepx", "max_contratos": 50,
+        "perfil": "perfiles/TOPSTEPX"}. El perfil es obligatorio: sin el, cada
+        numero abriria un perfil vacio, sin sesion. None = sin molde (un
+        numero desconocido se rechaza, como antes)."""
+        datos = self.get("cuenta_nueva")
+        if datos is None:
+            return None
+        problema = None
+        if not isinstance(datos, dict):
+            problema = "tiene que ser un objeto con plataforma, max_contratos y perfil"
+        else:
+            plataforma = str(datos.get("plataforma", "")).strip().lower()
+            maximo = datos.get("max_contratos")
+            if plataforma not in self.plataformas:
+                problema = f"plataforma {plataforma!r} desconocida"
+            elif isinstance(maximo, bool) or not isinstance(maximo, int) or maximo < 1:
+                problema = f"max_contratos tiene que ser un entero >= 1, no {maximo!r}"
+            elif es_sin_configurar(datos.get("perfil")):
+                problema = ("falta 'perfil' (el del login de esta maquina, por ejemplo "
+                            "perfiles/TOPSTEPX)")
+        if problema:
+            self.advertencias.append(
+                f"'cuenta_nueva' descartada: {problema}. Un numero de cuenta que no "
+                f"este en 'cuentas' se va a rechazar.")
+            return None
+        perfil = Path(datos["perfil"])
+        if not perfil.is_absolute():
+            perfil = self.base_dir / perfil
+        return {"plataforma": plataforma, "max_contratos": maximo, "perfil": perfil}
+
+    def cuenta(self, clave):
+        """La Cuenta que nombra una orden, por ALIAS o por el NUMERO completo de
+        la plataforma (cuenta_plataforma). Un numero que no esta en "cuentas"
+        se arma con el molde "cuenta_nueva", con el numero como alias.
+        None = desconocida.
+
+        Seguro ante un numero mal escrito: el bot elige esa cuenta en la
+        plataforma y la VERIFICA antes del clic; si no existe, no opera.
+        """
+        if clave is None:
+            return None
+        clave = str(clave).strip().upper()
+        if clave in self._cuentas:
+            return self._cuentas[clave]
+        if not NUMERO_DE_CUENTA.match(clave):
+            return None
+        for c in self._cuentas.values():
+            if c.cuenta_plataforma and c.cuenta_plataforma.strip().upper() == clave:
+                return c
+        if clave in self._cuentas_nuevas:
+            return self._cuentas_nuevas[clave]
+        if self._molde is None:
+            return None
+        nueva = Cuenta(alias=clave, cuenta_plataforma=clave, **self._molde)
+        self._cuentas_nuevas[clave] = nueva
+        return nueva
+
+    @property
+    def cuenta_nueva(self):
+        """El molde validado (o None), para mostrarlo."""
+        return None if self._molde is None else dict(self._molde)
 
     # --- acceso -------------------------------------------------------------
 
@@ -557,7 +631,13 @@ def imprimir_efectiva(config: "Config", salida=None):
         print(f"  {clave:26} = {valor!s:40}  <- {origen}", file=salida)
     for alias, c in sorted(config.cuentas.items()):
         print(f"  cuenta {alias}: {c.plataforma}, max {c.max_contratos} contrato(s), "
-              f"perfil {c.perfil}", file=salida)
+              f"perfil {c.perfil}, numero {c.cuenta_plataforma or '-'}", file=salida)
+    molde = config.cuenta_nueva
+    if molde:
+        print(f"  cuenta_nueva (numero no configurado): {molde['plataforma']}, max "
+              f"{molde['max_contratos']} contrato(s), perfil {molde['perfil']}", file=salida)
+    else:
+        print("  cuenta_nueva: - (un numero que no este en 'cuentas' se rechaza)", file=salida)
     if config.advertencias:
         print("ADVERTENCIAS:", file=salida)
         for a in config.advertencias:

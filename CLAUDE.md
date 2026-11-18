@@ -98,6 +98,36 @@ tabla `simbolos` de cada plataforma.
 - Medir con `python config.py` después de cualquier cambio: la cuenta tiene
   que aparecer con el perfil esperado y sin "Cuenta descartada".
 
+### La cuenta por NÚMERO completo (18/11/2026)
+
+El usuario lleva en un Excel el número de cada cuenta. Su código arma las
+órdenes, y cuando una cuenta muere la reemplaza otra con un número nuevo.
+Por eso CUENTA, en la orden, puede ser **el alias o el número completo**
+(`cuenta_plataforma`): `FUTVAN7 M6E buy 1 4 8 668214-39660124`.
+
+- **Número de una cuenta configurada**: es esa cuenta. Si en la misma orden
+  van el alias y su número, cuenta una sola vez.
+- **Número que no está en `cuentas`**: se arma con el molde
+  `cuenta_nueva` del `config.local.json`, con el número como alias:
+  `{"plataforma": "topstepx", "max_contratos": 50, "perfil": "perfiles/TOPSTEPX"}`.
+  - Es una clave local y el `perfil` es obligatorio (el del login de la
+    máquina).
+  - **Solo sirve con un login por máquina.** Con dos logins, el número no
+    dice qué perfil usar.
+- **Sin molde, un número nuevo se rechaza** ("cuenta desconocida", y el
+  mensaje dice que falta `cuenta_nueva`).
+- **Qué se toma como número**: algo con un tramo de 5 dígitos
+  (`NUMERO_DE_CUENTA` en `config.py`). Así un alias mal escrito (`TOP6`)
+  sigue siendo "desconocida" y no se toma por una cuenta nueva.
+- **Un número mal escrito no opera.** El bot elige la cuenta en la
+  plataforma por ese número y la verifica antes del clic. Si no existe,
+  falla ahí.
+- **`all` y `close all` son solo las cuentas de `cuentas`.** Una cuenta que
+  entró por el molde no se suma. Para operar todas las del Excel, el código
+  manda los números separados por coma.
+- **Mayúsculas:** el número se pasa a mayúsculas. Todos los medidos lo son
+  (TopstepX `668214-…`, Lucid `LFE…`, Tradeify `FTDFY…`, MFF `MFFU…`).
+
 ## Convivencia con el bot de MT5 en la misma PC
 
 Todo lleva nombres propios a propósito:
