@@ -73,10 +73,15 @@ class LocatorFalso:
         if self.selector in self.pagina.falla_en:
             raise ErrorFalso(f"Timeout esperando {self.selector}")
 
-    def click(self, timeout=None):
+    def click(self, timeout=None, button="left"):
         self._chequear()
         if self.selector in self.pagina.falla_al_clic:
             raise ErrorFalso(f"{self.selector} no se pudo clickear (tapado)")
+        if button == "right":
+            # Un clic derecho abre un menu: no es un clic "de verdad" y no
+            # dispara efecto_clic (se ve con pw.acciones("click_derecho")).
+            self.pagina._reg("click_derecho", self.selector)
+            return
         self.pagina._reg("click", self.selector)
         if self.pagina.efecto_clic:
             self.pagina.efecto_clic(self.pagina, self.selector)

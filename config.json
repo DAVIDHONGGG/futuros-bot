@@ -338,6 +338,15 @@
         "encabezados": "[role=grid]:has([role=columnheader]:has-text('NET POS')) [role=columnheader]",
         "columna_cantidad": "NET POS",
         "texto_fila": "{contrato}"
+      },
+      "_cierre": "Medido en FUTVAN4 (Lucid, 5 cuentas en un login) el 19/11/2026 con posiciones reales del operador en LUC1: (1) Positions muestra SOLO la cuenta elegida (17/11: con LUC2 elegida quedaba vacio; 19/11: una sola fila, la de LUC1), asi que sin texto_fila; con texto_fila '{cuenta_plataforma}' una van de UNA cuenta (sin columna ACCOUNT) leeria 'sin posiciones' y no cerraria nada; (2) la fila NO tiene boton de cerrar (ni al pasar el mouse); el clic DERECHO en una celda abre un menu (.action-menu-wrapper-desktop) con Quote Info, Alerts, Trade y 'Exit at MKT&CXL' (li sin data-testid); el menu esta en la pagina, no en la fila, y Escape NO lo cierra; (3) 'Exit at MKT&CXL' cerro MNQZ6 Long 1 a mercado SIN confirmacion en ~0.5 s y Tradovate cancelo el LMT y el STP del bracket. Descartados: 'Exit at Mkt & Cxl' del DOM y del grafico (cierran el simbolo de ESE modulo, no el de la fila). Sin medir: dos filas abiertas a la vez en la misma cuenta, y FUTVAN5/FUTVAN8 (una cuenta, sin columna ACCOUNT: la celda nth=1 es NET POS).",
+      "cierre": {
+        "por_fila": true,
+        "pasos": [
+          {"accion": "click_derecho", "selector": "[role=gridcell] >> nth=1"},
+          {"accion": "click_texto", "selector": ".action-menu-wrapper-desktop .action-lists",
+           "texto": "Exit at MKT&CXL", "en_pagina": true}
+        ]
       }
     },
     "topstepx": {

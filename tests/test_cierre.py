@@ -12,8 +12,10 @@ Lo que protege la plata, y se prueba aca:
   - dry_run no cierra;
   - el cierre se da por bueno SOLO si el panel queda sin posiciones de esa
     cuenta; si no, es ERROR (cerrar a mano);
-  - con texto_fila solo cuentan las filas de ESA cuenta (Tradovate con
-    varias cuentas en un login muestra todas en el mismo panel);
+  - con texto_fila solo cuentan las filas de ESA cuenta (para un panel que
+    muestre varias cuentas; TopstepX y Tradovate muestran solo la elegida);
+  - Tradovate: clic derecho en la fila y "Exit at MKT&CXL" en el menu de la
+    pagina (medido en FUTVAN4 el 19/11/2026);
   - close all = configuradas + operadas por el bot, y una cuenta sale de la
     lista cuando un cierre la deja sin nada.
 """
@@ -200,6 +202,84 @@ class TestCierrePorFila(BaseCierreWeb):
         self.assertEqual(validar_plataforma("topstepx", topstepx), [])
 
 
+CIERRE_POR_MENU = {"por_fila": True,
+                   "pasos": [{"accion": "click_derecho", "selector": "[role=gridcell] >> nth=1"},
+                             {"accion": "click_texto", "selector": ".menu .acciones",
+                              "texto": "Exit at MKT&CXL", "en_pagina": True}]}
+CELDA_DE_FILA = "#posiciones .fila >> [role=gridcell] >> nth=1"
+OPCION_DEL_MENU = ".menu .acciones >> texto=Exit at MKT&CXL"
+
+
+def exit_cierra_una_fila(pagina, selector):
+    """Como Tradovate: 'Exit at MKT&CXL' cierra la posicion y la fila QUEDA
+    con NET POS 0 (no desaparece)."""
+    if selector == OPCION_DEL_MENU:
+        for clave, cantidad in pagina.posiciones.items():
+            if cantidad != "0":
+                pagina.posiciones[clave] = "0"
+                return
+
+
+class TestCierrePorMenu(BaseCierreWeb):
+    """Tradovate (medido en FUTVAN4 el 19/11/2026): la fila no tiene boton; el
+    clic derecho abre un menu EN LA PAGINA con 'Exit at MKT&CXL', que cierra
+    sin confirmacion y cancela el bracket."""
+
+    def test_clic_derecho_en_la_fila_y_exit_en_el_menu_de_la_pagina(self):
+        def preparar(p):
+            p.posiciones = {"MNQZ6": "1", "M6EZ6": "-2"}
+            p.efecto_clic = exit_cierra_una_fila
+        self.crear(flota=flota_con_cierre(CIERRE_POR_MENU), preparar=preparar)
+        self.assertEqual(self.ej.cerrar_cuentas(["TV1"]), {"TV1": 2})
+        derechos = [r[2] for r in self.pw.acciones("click_derecho")]
+        self.assertEqual(derechos, [CELDA_DE_FILA, CELDA_DE_FILA])
+        # La opcion se busco en la PAGINA, no dentro de la fila.
+        self.assertEqual(self.pw.clics(), [OPCION_DEL_MENU, OPCION_DEL_MENU])
+
+    def test_la_fila_que_queda_en_0_no_se_vuelve_a_cerrar(self):
+        def preparar(p):
+            p.posiciones = {"MESZ6": "0", "MNQZ6": "1"}
+            p.efecto_clic = exit_cierra_una_fila
+        self.crear(flota=flota_con_cierre(CIERRE_POR_MENU), preparar=preparar)
+        self.assertEqual(self.ej.cerrar_cuentas(["TV1"]), {"TV1": 1})
+        self.assertEqual(len(self.pw.acciones("click_derecho")), 1)
+        self.assertEqual(self.pw.clics(), [OPCION_DEL_MENU])
+
+    def test_si_el_menu_no_aparece_es_error_y_nada_mas(self):
+        def preparar(p):
+            p.posiciones = {"MNQZ6": "1"}
+            p.falla_en = {OPCION_DEL_MENU}
+        self.crear(flota=flota_con_cierre(CIERRE_POR_MENU), preparar=preparar)
+        with self.assertLogs("bot_futuros.ejecutor_web", level="ERROR") as logs:
+            self.assertEqual(self.ej.cerrar_cuentas(["TV1"]), {"TV1": None})
+        self.assertIn("CIERRE NO VERIFICADO en TV1", "\n".join(logs.output))
+        self.assertEqual(self.pw.clics(), [])
+
+    def test_dry_run_ni_abre_el_menu(self):
+        self.crear(dry_run=True, flota=flota_con_cierre(CIERRE_POR_MENU),
+                   preparar=lambda p: setattr(p, "posiciones", {"MNQZ6": "1"}))
+        self.assertIn("dry_run, NO se cerro", self.ej.cerrar_cuentas(["TV1"])["TV1"])
+        self.assertEqual(self.pw.acciones("click_derecho"), [])
+        self.assertEqual(self.pw.clics(), [])
+
+    def test_el_de_tradovate_en_config_json_es_valido(self):
+        import json
+        from pathlib import Path
+        datos = json.loads((Path(__file__).parent.parent / "config.json")
+                           .read_text(encoding="utf-8"))
+        tradovate = datos["plataformas"]["tradovate"]
+        cierre = tradovate["cierre"]
+        self.assertTrue(cierre["por_fila"])
+        # Positions muestra SOLO la cuenta elegida (medido). Con texto_fila
+        # "{cuenta_plataforma}", una van de una cuenta (sin columna ACCOUNT)
+        # leeria "sin posiciones" y no cerraria nada.
+        self.assertNotIn("texto_fila", cierre)
+        self.assertEqual([p["accion"] for p in cierre["pasos"]], ["click_derecho", "click_texto"])
+        self.assertTrue(cierre["pasos"][1]["en_pagina"])
+        self.assertEqual(cierre["pasos"][1]["texto"], "Exit at MKT&CXL")
+        self.assertEqual(validar_plataforma("tradovate", tradovate), [])
+
+
 class TestValidacionDelCierre(unittest.TestCase):
 
     def plataforma(self, cierre):
@@ -219,6 +299,18 @@ class TestValidacionDelCierre(unittest.TestCase):
     def test_todo_en_un_selector(self):
         problemas = self.plataforma({"pasos": [{"accion": "click", "selector": "TODO: medir"}]})
         self.assertTrue(any("sin configurar" in p for p in problemas))
+
+    def test_click_derecho_y_en_pagina(self):
+        self.assertEqual(self.plataforma(CIERRE_POR_MENU), [])
+        sin_selector = {"pasos": [{"accion": "click_derecho"}]}
+        self.assertTrue(any("falta 'selector'" in p for p in self.plataforma(sin_selector)))
+        for paso, motivo in [
+                ({"accion": "click", "selector": "#x", "en_pagina": True}, "solo sirve en click_texto"),
+                ({"accion": "click_texto", "texto": "Exit", "selector": "#m", "en_pagina": "si"},
+                 "true o false"),
+                ({"accion": "click_texto", "texto": "Exit", "en_pagina": True}, "necesita 'selector'")]:
+            problemas = self.plataforma({"pasos": [paso]})
+            self.assertTrue(any(motivo in p for p in problemas), (paso, problemas))
 
     def test_un_cierre_no_tiene_contrato(self):
         problemas = self.plataforma(dict(CIERRE, texto_fila="{contrato}"))

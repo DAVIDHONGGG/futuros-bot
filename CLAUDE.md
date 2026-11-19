@@ -600,6 +600,20 @@ Las cinco están en **un solo login** y comparten el perfil `perfiles/LUCID`.
     en FUTVAN4.
   - No abrir `run_listener.bat` a mano con la tarea activa: dos listeners
     se roban los mensajes.
+- **Órdenes por número (19/11/2026):** `config.local.json` tiene
+  `"logins": {"lucid": {"perfil": "perfiles/LUCID", "max_contratos": 1}}`
+  (respaldo del archivo fuera del repo, en `Downloads\futuros-bot-respaldos`).
+  Medido con `CONFIG`: un LFE configurado resuelve a su alias, uno LFE sin
+  configurar va al login de lucid, MFF/Topstep se rechazan con el motivo.
+  Por Telegram, `MNQ buy 1 4 4 LFE05089433290001` fue LUC1 (dry run y en
+  vivo). En vivo: 20/20 y 40/40 y 100/100 ticks confirmados en <0,5 s con el
+  bracket verificado.
+- **Aviso falso "NO confirmada" con un bracket chico:** con 4/4 ticks en MNQ
+  (1 punto) y en M6E, la orden se llenó y el SL la cerró antes de que el bot
+  viera la posición (espera 10 s a que NET POS cambie). El bot avisó "NO
+  confirmada" y bloqueó la cuenta por el lote, aunque entró y salió. Es el
+  mismo TODO que el de FUTVAN8. Ese día además pasaron ~6 s entre el clic
+  en Send (log 10:02:35) y la orden en Tradovate (10:02:41): sin explicar.
 
 ### PC FUTVAN8: Tradeify en Tradovate (17/11/2026)
 
@@ -706,9 +720,43 @@ plataforma". Ahora:
 - **Prueba de punta a punta por Telegram:** `M6E buy 1 4 4 TOP2` (09:33,
   ritmo 11,1 s, SL/TP verificados) y `close TOP2` -> "Cierre verificado en
   TOP2: ['1'] -> sin posiciones" en 1,7 s; `operadas.json` quedó vacío.
-- **Falta:** Tradovate (medirlo en una van de Tradovate: con varias cuentas
-  en un login el panel muestra todas, así que ahí va `texto_fila:
-  "{cuenta_plataforma}"`), y ver un `close all` con varias cuentas.
+**Tradovate, medido con posiciones reales en FUTVAN4** (Lucid, 5 cuentas en
+un login, 19/11/2026; las abrió el operador en LUC1 y miró un script que
+solo leía):
+
+- **Positions muestra solo la cuenta elegida**: sin `texto_fila`. (La nota
+  de arriba suponía que mostraba todas; lo medido el 17/11 y el 19/11 dice
+  que no.) Además, `texto_fila: "{cuenta_plataforma}"` sería peligroso: en
+  una van de **una** cuenta (FUTVAN5, FUTVAN8) no hay columna ACCOUNT, la
+  fila no tiene el número y el bot leería "sin posiciones" sin cerrar nada.
+- **La fila no tiene botón de cerrar**, ni al pasar el mouse. El **clic
+  derecho** en una celda abre un menú (`.action-menu-wrapper-desktop`) con
+  Quote Info, Alerts, Trade y **"Exit at MKT&CXL"** (un `li` sin
+  `data-testid`). El menú está **en la página**, no dentro de la fila, y
+  **Escape no lo cierra** (se cierra eligiendo algo o con un clic en su
+  fondo, `.action-menu-backdrop`).
+- **"Exit at MKT&CXL" cerró MNQZ6 Long 1 sin confirmación** en ~0,5 s
+  (`Sell 1 MKT - Filled`), y Tradovate **canceló el LMT y el STP del
+  bracket** (los dos "Canceled", leídos en el aviso de arriba). La fila queda
+  con NET POS 0, que `filas_abiertas` no cuenta.
+- **Config:** `por_fila` con dos pasos: `click_derecho` (acción nueva) en
+  `[role=gridcell] >> nth=1` de la fila, y `click_texto` exacto de "Exit at
+  MKT&CXL" dentro de `.action-menu-wrapper-desktop .action-lists` con
+  **`en_pagina: true`** (opción nueva: el selector se busca en la página
+  aunque el paso corra en la fila). Probado contra la plataforma sin elegir
+  la opción: celda 1, opción 1, y 0 si se busca dentro de la fila.
+- Descartados: "Exit at Mkt & Cxl" del DOM y del gráfico (cierran el
+  símbolo de ese módulo; en esa PC el DOM está en NQZ6, no en MNQ).
+- **Sin medir:** dos posiciones abiertas a la vez en la misma cuenta (si el
+  menú actúa sobre la fila del clic derecho; el bucle por fila igual
+  verifica que se vaya una por vez y al final que no quede ninguna), y el
+  cierre en FUTVAN5/FUTVAN8, donde `nth=1` es la celda de NET POS: un
+  `close` con posición, la primera vez, lo prueba.
+- **Si el menú no aparece**, el paso falla, el close es ERROR con captura y
+  el menú puede quedar abierto: la orden siguiente falla sin operar (el
+  fondo del menú tapa el ticket). Recargar o cerrar a mano.
+
+**Falta:** ver un `close all` con varias cuentas.
 
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 
@@ -736,8 +784,8 @@ plataforma". Ahora:
 1. ~~Paso `verificar`~~: hecho (11/11/2026), junto con `repetir`, `marcar`,
    `escribir` con `teclear`, los marcadores `{riesgo_usd}`, `{ganancia_usd}`,
    `{contratos_menos_1}` y `{cuenta_ultimos4}`, y el tope `max_riesgo_usd`.
-2. **Etapa 3**: cierres (hechos en TopstepX el 19/11/2026, ver "El close
-   por la web"; falta Tradovate), multi-cuenta,
+2. **Etapa 3**: cierres (hechos en TopstepX y en Tradovate el 19/11/2026,
+   ver "El close por la web"), multi-cuenta,
    latido con datos del navegador, `check_setup.py` completo (Playwright,
    Chromium, config, perfiles).
 3. **Etapa 4**: ~~orden real mínima~~ hecha en TopstepX (12/11/2026, ver

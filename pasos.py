@@ -6,12 +6,16 @@ Cada plataforma dice COMO capturar una orden con una lista de pasos:
 
     {"accion": "click",       "selector": "<selector>"}
     {"accion": "doble_click", "selector": "<selector>"}
+    {"accion": "click_derecho", "selector": "<selector>"}     (abre el menu contextual)
     {"accion": "escribir",    "selector": "<selector>", "valor": "{contratos}"}
     {"accion": "escribir",    "selector": "<selector>", "valor": "{contrato}", "teclear": true}
                               (tecla por tecla, para autocompletados que no filtran con fill)
     {"accion": "click_texto", "texto": "{contrato}"}
     {"accion": "click_texto", "texto": "{contrato}", "selector": "<lista>"}
                               (el texto exacto, buscado SOLO dentro de <lista>)
+    {"accion": "click_texto", "texto": "Exit", "selector": "<menu>", "en_pagina": true}
+                              (en pasos por fila: <menu> se busca en la PAGINA, no
+                              dentro de la fila; los menus y dialogos no estan ahi)
     {"accion": "tecla",       "tecla": "Enter"}                 (a la pagina)
     {"accion": "tecla",       "tecla": "Enter", "selector": "<selector>"}
     {"accion": "esperar",     "ms": 300}
@@ -91,14 +95,18 @@ Con "por_fila": true los pasos corren UNA VEZ POR CADA FILA abierta, con los
 selectores relativos a esa fila (como pasos_despues): es el boton de cerrar
 de cada posicion. Medido en TopstepX (19/11/2026): la X de la columna Close
 de la fila cierra a mercado SIN confirmacion, y la plataforma cancela sola
-el SL y el TP de esa posicion.
+el SL y el TP de esa posicion. En Tradovate (FUTVAN4, 19/11/2026) la fila no
+tiene boton: el clic DERECHO en la fila abre un menu con "Exit at MKT&CXL",
+que esta en la pagina (por eso "en_pagina" en click_texto).
 
 Corren con la cuenta ya elegida (pasos_seleccionar_cuenta). Antes se lee el
 panel de posiciones: sin posiciones no se hace clic en nada. Despues, el
 panel tiene que quedar SIN filas con cantidad. texto_fila dice que filas del
-panel son de ESTA cuenta: hace falta si el panel muestra varias cuentas a la
-vez (Tradovate con varias cuentas en un login agrega la columna ACCOUNT); sin
-texto_fila cuenta toda fila con cantidad. Solo admiten los marcadores de la
+panel son de ESTA cuenta: hace falta solo si el panel muestra varias cuentas
+a la vez; sin texto_fila cuenta toda fila con cantidad. Ni TopstepX ni
+Tradovate lo necesitan: su panel muestra solo la cuenta elegida (medido; en
+Tradovate la columna ACCOUNT aparece con varias cuentas en un login, pero
+igual filtra por la elegida). Solo admiten los marcadores de la
 cuenta ({cuenta_plataforma}, {cuenta_ultimos4}): un cierre no tiene contrato.
 
 Todo lo de aca corre en el hilo del navegador (ver ejecutor_web.py). Antes de
@@ -113,8 +121,8 @@ from ejecutor import chequear_aborto
 
 log = logging.getLogger("bot_futuros.pasos")
 
-ACCIONES = {"click", "doble_click", "escribir", "click_texto", "tecla", "esperar",
-            "repetir", "marcar", "verificar", "click_si_aparece"}
+ACCIONES = {"click", "doble_click", "click_derecho", "escribir", "click_texto", "tecla",
+            "esperar", "repetir", "marcar", "verificar", "click_si_aparece"}
 
 MARCADORES = {"simbolo", "contrato", "contratos", "sl_ticks", "tp_ticks", "accion",
               "lado", "lado_opuesto",
@@ -241,6 +249,7 @@ def _problemas_de_pasos(nombre: str, pasos) -> list:
         requeridos = {
             "click": ["selector"],
             "doble_click": ["selector"],
+            "click_derecho": ["selector"],
             "escribir": ["selector", "valor"],
             "click_texto": ["texto"],
             "tecla": ["tecla"],
@@ -259,6 +268,14 @@ def _problemas_de_pasos(nombre: str, pasos) -> list:
                 problemas.append(f"{donde}: '{campo}' sin configurar ({paso[campo]!r})")
         if accion == "esperar" and "ms" not in paso and "selector" not in paso:
             problemas.append(f"{donde}: esperar necesita 'ms' o 'selector'")
+        if "en_pagina" in paso:
+            if accion != "click_texto":
+                problemas.append(f"{donde}: 'en_pagina' solo sirve en click_texto")
+            elif not isinstance(paso["en_pagina"], bool):
+                problemas.append(f"{donde}: 'en_pagina' tiene que ser true o false")
+            elif paso["en_pagina"] and not paso.get("selector"):
+                problemas.append(f"{donde}: 'en_pagina' necesita 'selector' (el menu o "
+                                 f"dialogo donde buscar el texto)")
         if ("selector" in paso and accion in ("tecla", "esperar", "click_texto")
                 and es_sin_configurar(paso["selector"])):
             problemas.append(f"{donde}: 'selector' sin configurar ({paso['selector']!r})")
@@ -465,6 +482,12 @@ def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: st
             base.locator(paso["selector"]).click(timeout=timeout_ms)
         elif accion == "doble_click":
             base.locator(paso["selector"]).dblclick(timeout=timeout_ms)
+        elif accion == "click_derecho":
+            # Abre el menu contextual. En Tradovate (FUTVAN4, 19/11/2026) el
+            # cierre de una posicion esta ahi: la fila de Positions no tiene
+            # boton. El menu NO se cierra con Escape (medido): solo eligiendo
+            # una opcion o con un clic en su fondo.
+            base.locator(paso["selector"]).click(button="right", timeout=timeout_ms)
         elif accion == "escribir":
             campo = base.locator(paso["selector"])
             texto = rellenar(paso["valor"], valores)
@@ -480,8 +503,11 @@ def ejecutar_pasos(page, pasos: list, valores: dict, timeout_ms: int, nombre: st
                 campo.fill(texto, timeout=timeout_ms)
         elif accion == "click_texto":
             # Con "selector", el texto se busca SOLO adentro de ese elemento
-            # (la lista de un autocompletado, por ejemplo).
-            dentro = base.locator(paso["selector"]) if paso.get("selector") else base
+            # (la lista de un autocompletado, por ejemplo). Con "en_pagina",
+            # ese elemento se busca en la PAGINA aunque el paso corra dentro de
+            # una fila: el menu del clic derecho no esta dentro de la fila.
+            origen = page if paso.get("en_pagina") else base
+            dentro = origen.locator(paso["selector"]) if paso.get("selector") else base
             dentro.get_by_text(rellenar(paso["texto"], valores),
                                exact=bool(paso.get("exacto", True))).click(timeout=timeout_ms)
         elif accion == "tecla":
