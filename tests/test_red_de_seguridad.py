@@ -31,6 +31,10 @@ class TestRedActiva(unittest.TestCase):
         self.assertTrue(str(lf.ARCHIVO_PROGRAMADAS).startswith(str(tests.DIR_TEMPORAL)))
         self.assertNotEqual(lf.ARCHIVO_PROGRAMADAS, lf.BASE_DIR / "programadas.json")
 
+    def test_operadas_va_a_un_temporal(self):
+        import operadas
+        self.assertTrue(str(operadas.ARCHIVO).startswith(str(tests.DIR_TEMPORAL)))
+
     def test_no_se_puede_lanzar_el_actualizador(self):
         with self.assertRaises(RuntimeError):
             lf.subprocess.Popen(["powershell.exe", "-File", "actualizar.ps1"])

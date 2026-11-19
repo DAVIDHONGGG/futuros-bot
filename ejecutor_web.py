@@ -46,6 +46,11 @@ FLUJO DE UNA ORDEN (en el hilo del navegador):
      grupo de errores y la cuenta se bloquea por el resto del lote. Nunca se
      cierra nada solo.
 
+CIERRE ("close"): con la cuenta elegida, se lee el panel de posiciones (sin
+posiciones no se toca nada), y en vivo se corren los pasos de "cierre" de la
+plataforma; vale solo si el panel queda SIN posiciones de esa cuenta. Sin
+"cierre" medido en config.json, el close es ERROR y se cierra a mano.
+
 VENTANA. Con no_robar_foco (default) la ventana se abre FUERA de la pantalla y
 nunca se trae al frente: en una PC con el bot de MT5, una ventana encima le
 tapa las plantillas de pixeles y se lleva sus teclas. Y como una ventana
@@ -65,8 +70,9 @@ from datetime import datetime
 from pathlib import Path
 
 from ejecutor import EjecutorBase, OperacionAbortada, ResultadoOrden, chequear_aborto, operacion
-from pasos import (ejecutar_pasos, esperar_con_aborto, fila_de, leer_posiciones,
-                   texto_de_fila, validar_plataforma, valores_de)
+from pasos import (ejecutar_pasos, esperar_con_aborto, fila_de, filas_abiertas,
+                   leer_posiciones, rellenar,
+                   texto_de_fila, validar_plataforma, valores_de, valores_de_cuenta)
 
 log = logging.getLogger("bot_futuros.ejecutor_web")
 
@@ -231,9 +237,11 @@ class EjecutorWeb(EjecutorBase):
         with operacion(f"lote de {len(trabajos)} orden(es)"):
             return self._hilo.ejecutar(self._recorrer_lote, trabajos)
 
-    def _cerrar_cuenta(self, alias: str) -> int:
-        raise NotImplementedError(
-            "los cierres por la web llegan en la Etapa 3; cerra a mano en la plataforma")
+    def cerrar_cuentas(self, aliases: list) -> dict:
+        # Mismo criterio que colocar_lote: el candado en el hilo que llama, el
+        # trabajo en el hilo del navegador.
+        with operacion(f"cierre de {', '.join(aliases)}"):
+            return self._hilo.ejecutar(self._recorrer_cierre, aliases)
 
     def salud(self) -> list:
         """Sin tocar el navegador: lo llama el latido desde otro hilo."""
@@ -389,6 +397,114 @@ class EjecutorWeb(EjecutorBase):
         log.info(ok)
         return ResultadoOrden(etiqueta, alias, confirmado=True,
                               detalle=f"{detalle}; SL/TP puestos")
+
+    # --- un cierre (hilo del navegador) ------------------------------------
+
+    def _cerrar_cuenta(self, alias: str) -> int | str:
+        """Cierra TODO lo de la cuenta con los pasos de "cierre" de su
+        plataforma (ver pasos.py) y lo verifica en el panel de posiciones.
+
+        Devuelve cuantas posiciones habia (y ya no hay), 0 si no habia nada
+        (sin clic), o un texto en dry_run (sin clic). Levanta si no se pudo
+        cerrar o verificar: quien llama lo informa como ERROR.
+        """
+        cuenta = self.config.cuenta(alias)
+        if cuenta is None:
+            raise ValueError(f"cuenta {alias} desconocida en esta maquina")
+        nombre_plataforma = cuenta.plataforma
+        plataforma = self.config.plataformas.get(nombre_plataforma)
+        problemas = validar_plataforma(nombre_plataforma, plataforma)
+        if problemas:
+            raise ValueError("plataforma sin configurar: " + "; ".join(problemas[:3]))
+        conf = plataforma.get("cierre")
+        if not conf:
+            raise RuntimeError(
+                f"el cierre por la web en {nombre_plataforma} todavia no esta medido "
+                f"(falta 'cierre' en config.json): cerra a mano en la plataforma")
+
+        to = self.opciones["timeout_ms"]
+        valores = valores_de_cuenta(cuenta)
+        posiciones = plataforma["posiciones"]
+        buscado = rellenar(conf.get("texto_fila", ""), valores)
+        log.info(f"Iniciando cierre de {alias} [{nombre_plataforma}"
+                 f"{', filas con ' + repr(buscado) if buscado else ''}]")
+        page = self._pagina(cuenta, plataforma)
+
+        # --- hasta el clic: no se toco nada --------------------------------
+        try:
+            if plataforma.get("pasos_seleccionar_cuenta"):
+                ejecutar_pasos(page, plataforma["pasos_seleccionar_cuenta"], valores, to,
+                               "seleccionar cuenta")
+            try:
+                antes = leer_posiciones(page, posiciones, buscado, to, exigir_numero=True)
+            except OperacionAbortada:
+                raise
+            except Exception as e:
+                raise RuntimeError(
+                    f"no se pudo leer el panel de posiciones ({e}); sin eso no se "
+                    f"puede verificar el cierre, asi que NO se hace clic") from e
+            if not antes:
+                log.info(f"{alias}: sin posiciones abiertas; no hay nada que cerrar.")
+                return 0
+            chequear_aborto(f"antes de cerrar {alias}")
+            if self.dry_run:
+                captura = self._capturar(page, alias, "dryrun-cierre")
+                log.warning(f"DRY_RUN activo: NO se cerro {alias} (posiciones "
+                            f"{list(antes)}). Captura: {captura}")
+                return f"dry_run, NO se cerro: {len(antes)} posicion(es) abierta(s) {list(antes)}"
+        except BaseException as e:
+            if not isinstance(e, OperacionAbortada):
+                self._ultimo_error = f"{alias}: cierre: {e}"[:200]
+            self._capturar(page, alias,
+                           "cierre-aborto" if isinstance(e, OperacionAbortada) else "cierre-error")
+            raise
+
+        # --- el cierre: sin mirar el aborto (frenar a mitad dejaria un
+        # dialogo abierto y no ahorra nada: cerrar no agrega riesgo) --------
+        log.warning(f"Cerrando {alias}: posiciones {list(antes)}")
+        try:
+            if conf.get("por_fila"):
+                self._cerrar_por_fila(page, conf, posiciones, buscado, valores, len(antes))
+            else:
+                ejecutar_pasos(page, conf["pasos"], valores, to, "cierre", con_aborto=False)
+            limite = time.monotonic() + self.opciones["segundos_verificacion"]
+            while True:
+                despues = leer_posiciones(page, posiciones, buscado, to)
+                if not despues:
+                    break
+                if time.monotonic() >= limite:
+                    raise RuntimeError(
+                        f"siguen abiertas {list(despues)} a los "
+                        f"{self.opciones['segundos_verificacion']} s")
+                page.wait_for_timeout(PAUSA_VERIFICACION_MS)
+        except Exception as e:
+            self._ultimo_error = f"{alias}: cierre sin verificar: {e}"[:200]
+            captura = self._capturar(page, alias, "cierre-sin-verificar")
+            log.error(f"CIERRE NO VERIFICADO en {alias}: {e}. CERRA A MANO. Captura: {captura}")
+            raise RuntimeError(f"cierre no verificado en {alias}: {e}") from e
+        log.warning(f"Cierre verificado en {alias}: {list(antes)} -> sin posiciones.")
+        return len(antes)
+
+    def _cerrar_por_fila(self, page, conf, posiciones, buscado, valores, cuantas):
+        """Los pasos de cierre sobre cada fila abierta, de a una: se relee el
+        panel antes de cada fila (al cerrarse una, las demas se corren) y se
+        espera a que esa desaparezca antes de la siguiente. Como mucho
+        `cuantas` vueltas (las que habia antes): nunca un clic de mas. Si una
+        no desaparece, se corta aca y la verificacion de quien llama lo
+        informa."""
+        to = self.opciones["timeout_ms"]
+        for n in range(1, cuantas + 1):
+            abiertas = filas_abiertas(page, posiciones, buscado, to)
+            if not abiertas:
+                return
+            fila = page.locator(posiciones["filas"]).nth(abiertas[0][0])
+            ejecutar_pasos(page, conf["pasos"], valores, to, f"cierre fila {n}",
+                           con_aborto=False, raiz=fila)
+            limite = time.monotonic() + self.opciones["segundos_verificacion"]
+            while len(filas_abiertas(page, posiciones, buscado, to)) >= len(abiertas):
+                if time.monotonic() >= limite:
+                    return
+                page.wait_for_timeout(PAUSA_VERIFICACION_MS)
 
     def _verificar_proteccion(self, page, plataforma, valores, alias):
         """Relee en la PAGINA que el SL/TP que salio con la entrada quedo

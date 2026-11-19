@@ -216,23 +216,29 @@ class EjecutorBase:
     # --- cierres ------------------------------------------------------------
 
     def cerrar_cuentas(self, aliases: list) -> dict:
-        """{alias: posiciones cerradas, o None si fallo}. Un fallo en una
+        """{alias: resultado}. El resultado es un int (posiciones cerradas y
+        VERIFICADAS; 0 = no habia nada), un texto (no se cerro a proposito:
+        dry_run) o None (fallo: hay que mirar la plataforma). Un fallo en una
         cuenta no corta las demas; un aborto si."""
-        resultados = {}
         with operacion(f"cierre de {', '.join(aliases)}"):
-            for alias in aliases:
-                try:
-                    chequear_aborto(f"antes de cerrar {alias}")
-                    resultados[alias] = self._cerrar_cuenta(alias)
-                except OperacionAbortada:
-                    log.warning(f"ABORTO: no se cierra {alias} ni las siguientes.")
-                    break
-                except Exception:
-                    log.exception(f"Fallo cerrando la cuenta {alias}")
-                    resultados[alias] = None
+            return self._recorrer_cierre(aliases)
+
+    def _recorrer_cierre(self, aliases: list) -> dict:
+        """Sin tomar el candado (lo toma quien llama), como _recorrer_lote."""
+        resultados = {}
+        for alias in aliases:
+            try:
+                chequear_aborto(f"antes de cerrar {alias}")
+                resultados[alias] = self._cerrar_cuenta(alias)
+            except OperacionAbortada:
+                log.warning(f"ABORTO: no se cierra {alias} ni las siguientes.")
+                break
+            except Exception:
+                log.exception(f"Fallo cerrando la cuenta {alias}")
+                resultados[alias] = None
         return resultados
 
-    def _cerrar_cuenta(self, alias: str) -> int:
+    def _cerrar_cuenta(self, alias: str) -> int | str:
         raise NotImplementedError
 
     # --- salud --------------------------------------------------------------

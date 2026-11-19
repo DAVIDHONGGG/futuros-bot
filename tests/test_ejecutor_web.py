@@ -352,9 +352,12 @@ class TestDesdeElListener(unittest.TestCase):
         self.assertIn("ejecutor web", ej.salud()[0])
         self.assertFalse(ej._hilo.vivo())
 
-    def test_los_cierres_todavia_no(self):
+    def test_sin_cierre_medido_el_close_es_error(self):
+        # Los cierres con "cierre" configurado: ver test_cierre.py.
         ej = EjecutorWeb(config_de_prueba())
-        self.assertEqual(ej.cerrar_cuentas(["TV1"]), {"TV1": None})
+        self.addCleanup(ej.cerrar)
+        with self.assertLogs("bot_futuros.ejecutor", level="ERROR"):
+            self.assertEqual(ej.cerrar_cuentas(["TV1"]), {"TV1": None})
 
 
 if __name__ == "__main__":

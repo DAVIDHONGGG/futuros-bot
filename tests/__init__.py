@@ -53,6 +53,12 @@ import listener_futuros as _lf  # noqa: E402
 
 _lf.ARCHIVO_PROGRAMADAS = DIR_TEMPORAL / "programadas.json"
 
+# Lo mismo con las cuentas operadas: un test que coloque una orden "con
+# clic" no puede meter una cuenta falsa en el close all de la maquina.
+import operadas as _operadas  # noqa: E402
+
+_operadas.ARCHIVO = DIR_TEMPORAL / "operadas.json"
+
 
 # 3. Ningun test lanza actualizar.ps1 (pararia el listener real y haria git
 #    pull). Los tests del update parchean _lf.subprocess.Popen.

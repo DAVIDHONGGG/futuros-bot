@@ -18,7 +18,9 @@ este bot) o ALL:
 Formato completo y validacion: ver ordenes.py. Varias lineas en un mensaje
 son ordenes independientes; las que comparten hora se colocan juntas.
 
-    FUT1 close [CUENTA|all] [HH:MM]      -> cierra posiciones
+    FUT1 close [CUENTA|all] [HH:MM]      -> cierra posiciones ("all" = las
+                                            configuradas + las que el bot
+                                            opero, ver operadas.py)
     FUT1 update / ALL update             -> actualiza desde el repo
     FUT1 chatid                          -> dice el chat_id de este chat
     stop / parar / cancelar              -> SIN prefijo frena a todas
@@ -47,6 +49,7 @@ from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 import avisos
 import ejecutor
+import operadas
 from config import CONFIG as _CONFIG_INICIAL, PREFIJO_TODAS
 from ordenes import (
     GRACIA_HORA_PASADA,
@@ -235,9 +238,23 @@ def _etiqueta_de_cierre(cierre: dict) -> str:
 
 
 def _cuentas_del_cierre(cierre: dict) -> list:
-    """Alias que toca un cierre. Levanta ValueError si no se puede saber."""
+    """Alias que toca un cierre. Levanta ValueError si no se puede saber.
+
+    "todas" = las configuradas MAS las que el bot opero en los ultimos dias
+    (operadas.py): las que llegaron por numero no estan en "cuentas"."""
     if cierre["modo"] == "todas":
-        return resolver_cuentas("all", CONFIG)
+        aliases = list(CONFIG.cuentas)
+        for clave in operadas.vigentes():
+            cuenta = CONFIG.cuenta(clave)
+            if cuenta is None:
+                log.warning(f"close all: {clave} se opero pero ya no se puede resolver en "
+                            f"esta maquina ({CONFIG.motivo_desconocida(clave)}); se saltea.")
+            elif cuenta.alias not in aliases:
+                aliases.append(cuenta.alias)
+        if not aliases:
+            raise ValueError("Esta maquina no tiene cuentas configuradas ni cuentas "
+                             "operadas en los ultimos dias.")
+        return aliases
     if cierre["modo"] == "cuenta":
         return resolver_cuentas(cierre["cuenta"], CONFIG)
     return resolver_cuentas(None, CONFIG)
@@ -479,6 +496,8 @@ async def _ejecutar_lote(responder, ordenes: list):
         return
     try:
         resultados = await asyncio.to_thread(EJECUTOR.colocar_lote, trabajos)
+        # Con clic (confirmada o no): para que "close all" la encuentre.
+        operadas.anotar(sorted({r.cuenta for r in resultados if r.confirmado is not None}))
         await responder(f"Listo ({_modo()}).\n{_resumen(resultados)}")
     except Exception as e:
         log.exception("Error al procesar el lote de ordenes")
@@ -494,14 +513,21 @@ async def _ejecutar_cierre(responder, cierre: dict):
     try:
         await responder(f"Cerrando posiciones en {', '.join(aliases)} ({_modo()})...")
         resultados = await asyncio.to_thread(EJECUTOR.cerrar_cuentas, aliases)
-        lineas = []
+        lineas, sin_nada = [], []
         for alias in aliases:
-            if alias not in resultados:
+            resultado = resultados.get(alias, "falta")
+            if resultado == "falta":
                 lineas.append(f"{alias}: NO se intento (abortado con stop)")
-            elif resultados[alias] is None:
+            elif resultado is None:
                 lineas.append(f"{alias}: ERROR - revisa la plataforma")
+            elif isinstance(resultado, str):
+                lineas.append(f"{alias}: {resultado}")
             else:
-                lineas.append(f"{alias}: {resultados[alias]} posicion(es) cerrada(s)")
+                sin_nada.append(alias)
+                lineas.append(f"{alias}: sin posiciones" if resultado == 0
+                              else f"{alias}: {resultado} posicion(es) cerrada(s)")
+        # Verificada sin posiciones: ya no hace falta en el proximo close all.
+        operadas.olvidar(sin_nada)
         await responder("Listo.\n" + "\n".join(lineas))
     except Exception as e:
         log.exception(f"Error al cerrar posiciones ({cierre})")

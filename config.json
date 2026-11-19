@@ -486,6 +486,13 @@
         "filas": "[data-testid='positions-display-table'] [role='row'][data-id]",
         "cantidad": "[data-field='positionSize']",
         "texto_fila": "/{simbolo}"
+      },
+      "_cierre": "Medido en FUTVAN7 el 19/11/2026 con una posicion real (long 1 M6E en TOP2, que coloco el bot): (1) el panel Positions muestra SOLO la cuenta elegida (con TOP1 vacio, con TOP2 la fila), asi que no hace falta texto_fila; (2) cada fila trae su boton en la columna Close, data-testid 'positions-click-button-close-<id de la fila>'; un clic cerro a mercado SIN confirmacion en <0.6 s y TopstepX cancelo solo el SL (stop) y el TP (limit) de la posicion: no quedo ninguna orden 'Working'. Descartados: CLOSE POSITION del DOM (cierra solo el contrato del DOM) y FLATTEN ALL (activo aun sin posicion en la cuenta: puede ser de todas las cuentas del login; no medido, no usar).",
+      "cierre": {
+        "por_fila": true,
+        "pasos": [
+          {"accion": "click", "selector": "[data-testid^='positions-click-button-close-']"}
+        ]
       }
     }
   }

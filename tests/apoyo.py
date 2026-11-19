@@ -209,9 +209,12 @@ class ListenerAislado:
         lf.aplicar_config(config or config_de_prueba(), self.ej)
         self.addCleanup(lf.aplicar_config, CONFIG_NEUTRA)
 
-        parche = patch.object(lf, "ARCHIVO_PROGRAMADAS", dir_temporal() / "programadas.json")
-        parche.start()
-        self.addCleanup(parche.stop)
+        import operadas
+        temporal = dir_temporal()
+        for parche in (patch.object(lf, "ARCHIVO_PROGRAMADAS", temporal / "programadas.json"),
+                       patch.object(operadas, "ARCHIVO", temporal / "operadas.json")):
+            parche.start()
+            self.addCleanup(parche.stop)
 
         def _cancelar_tareas():
             for t in list(lf._TAREAS_PROGRAMADAS):

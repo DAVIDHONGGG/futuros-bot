@@ -6,8 +6,10 @@ __pycache__/
 *.pyc
 logs/
 
-# Estado de ESTA maquina: lo programado que todavia no se ejecuto.
+# Estado de ESTA maquina: lo programado que todavia no se ejecuto, y las
+# cuentas que el bot opero (para el close all).
 programadas.json
+operadas.json
 
 # Perfiles de navegador persistentes de cada cuenta (sesion iniciada a mano
 # por el operador). Son de ESTA maquina y contienen cookies de sesion.

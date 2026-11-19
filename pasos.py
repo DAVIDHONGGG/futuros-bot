@@ -79,6 +79,28 @@ la pagina no hay contrasena, y la sesion de Google guardada en el perfil
 hace el resto. Si Google pide algo, la sesion no aparece y la orden falla
 con captura; el bot no escribe nada en ningun caso.
 
+cierre (opcional): como cerrar TODO lo de una cuenta (el "close" del grupo).
+Sin "cierre" la plataforma no cierra por la web: el close falla y se cierra a
+mano. Se MIDE en cada plataforma con una posicion real abierta:
+
+    "cierre": {"pasos": [{"accion": "click", "selector": "<boton de cerrar>"},
+                         {"accion": "click_si_aparece", "selector": "<confirmar>"}],
+               "texto_fila": "{cuenta_plataforma}"}
+
+Con "por_fila": true los pasos corren UNA VEZ POR CADA FILA abierta, con los
+selectores relativos a esa fila (como pasos_despues): es el boton de cerrar
+de cada posicion. Medido en TopstepX (19/11/2026): la X de la columna Close
+de la fila cierra a mercado SIN confirmacion, y la plataforma cancela sola
+el SL y el TP de esa posicion.
+
+Corren con la cuenta ya elegida (pasos_seleccionar_cuenta). Antes se lee el
+panel de posiciones: sin posiciones no se hace clic en nada. Despues, el
+panel tiene que quedar SIN filas con cantidad. texto_fila dice que filas del
+panel son de ESTA cuenta: hace falta si el panel muestra varias cuentas a la
+vez (Tradovate con varias cuentas en un login agrega la columna ACCOUNT); sin
+texto_fila cuenta toda fila con cantidad. Solo admiten los marcadores de la
+cuenta ({cuenta_plataforma}, {cuenta_ultimos4}): un cierre no tiene contrato.
+
 Todo lo de aca corre en el hilo del navegador (ver ejecutor_web.py). Antes de
 CADA paso se revisa el aborto: un "stop" a mitad de la captura corta ahi.
 """
@@ -152,6 +174,32 @@ def _problemas_de_login(login) -> list:
             if isinstance(paso, dict) and paso.get("accion") not in ACCIONES_DEL_LOGIN:
                 problemas.append(f"login.pasos_al_entrar paso {n}: accion {paso.get('accion')!r} "
                                  f"no permitida en el login (solo {', '.join(sorted(ACCIONES_DEL_LOGIN))})")
+    return problemas
+
+
+MARCADORES_DEL_CIERRE = {"cuenta_plataforma", "cuenta_ultimos4"}
+
+
+def _problemas_de_cierre(cierre) -> list:
+    if not isinstance(cierre, dict):
+        return ["'cierre' tiene que ser un objeto"]
+    pasos = cierre.get("pasos")
+    if not isinstance(pasos, list) or not pasos:
+        return ["'cierre.pasos' tiene que ser una lista no vacia"]
+    problemas = _problemas_de_pasos("cierre.pasos", pasos)
+    textos = [("cierre.texto_fila", cierre.get("texto_fila", ""))]
+    for n, paso in enumerate(pasos, start=1):
+        if isinstance(paso, dict):
+            textos += [(f"cierre.pasos paso {n}", paso.get(c, "")) for c in CAMPOS_CON_MARCADORES]
+    for donde, texto in textos:
+        for marcador in _PATRON_MARCADOR.findall(str(texto)):
+            if marcador not in MARCADORES_DEL_CIERRE:
+                problemas.append(f"{donde}: marcador {{{marcador}}} no sirve en un cierre "
+                                 f"(solo {', '.join(sorted(MARCADORES_DEL_CIERRE))})")
+    if "texto_fila" in cierre and es_sin_configurar(cierre["texto_fila"]):
+        problemas.append("'cierre.texto_fila' sin configurar")
+    if "por_fila" in cierre and not isinstance(cierre["por_fila"], bool):
+        problemas.append("'cierre.por_fila' tiene que ser true o false")
     return problemas
 
 
@@ -252,6 +300,8 @@ def validar_plataforma(nombre: str, datos: dict) -> list:
         problemas.extend(_problemas_de_login(datos["login"]))
     if "ritmo" in datos:
         problemas.extend(_problemas_de_ritmo(datos["ritmo"]))
+    if "cierre" in datos:
+        problemas.extend(_problemas_de_cierre(datos["cierre"]))
     posiciones = datos.get("posiciones")
     if not isinstance(posiciones, dict):
         problemas.append("'posiciones' sin configurar (hace falta para verificar la orden)")
@@ -292,6 +342,17 @@ def valores_de(trabajo: dict, cuenta) -> dict:
         "riesgo_usd": trabajo.get("riesgo_usd"),
         "ganancia_usd": trabajo.get("ganancia_usd"),
     }
+
+
+def valores_de_cuenta(cuenta) -> dict:
+    """Los valores de un CIERRE: solo los de la cuenta. Los de una orden
+    (contrato, contratos...) quedan en None: usarlos es un error, no un
+    texto vacio."""
+    valores = dict.fromkeys(MARCADORES)
+    cuenta_plataforma = getattr(cuenta, "cuenta_plataforma", None)
+    valores["cuenta_plataforma"] = cuenta_plataforma
+    valores["cuenta_ultimos4"] = cuenta_plataforma[-4:] if cuenta_plataforma else None
+    return valores
 
 
 _AYUDA_FALTANTE = {
@@ -549,11 +610,21 @@ def leer_posiciones(page, conf: dict, buscado: str, timeout_ms: int,
     del clic no se exige (frenar ahi no deshace nada, y una celda a medio
     dibujar podria cortar una verificacion buena).
     """
+    return tuple(sorted(c for _, c in filas_abiertas(page, conf, buscado, timeout_ms,
+                                                     exigir_numero)))
+
+
+def filas_abiertas(page, conf: dict, buscado: str, timeout_ms: int,
+                   exigir_numero: bool = False) -> list:
+    """[(lugar de la fila entre posiciones.filas, cantidad)] de las filas que
+    contienen `buscado` y tienen cantidad distinta de 0. Lo que hay detras de
+    leer_posiciones (ver ahi), con el LUGAR de cada fila: el cierre por fila
+    hace clic en el boton de esa misma fila."""
     page.locator(conf["panel"]).wait_for(state="visible", timeout=timeout_ms)
     columna = indice_de_columna(page, conf, timeout_ms)
-    cantidades = []
+    abiertas = []
     buscado = buscado.upper()
-    for fila in page.locator(conf["filas"]).all():
+    for lugar, fila in enumerate(page.locator(conf["filas"]).all()):
         texto = fila.inner_text(timeout=timeout_ms)
         if buscado in texto.upper():
             celda = fila.locator(conf["cantidad"])
@@ -567,5 +638,5 @@ def leer_posiciones(page, conf: dict, buscado: str, timeout_ms: int,
                     f"del panel de posiciones)")
             if numero == 0:
                 continue
-            cantidades.append(cantidad)
-    return tuple(sorted(cantidades))
+            abiertas.append((lugar, cantidad))
+    return abiertas

@@ -672,6 +672,44 @@ greenlet, playwright y pyee.
 - **Falta:** la tarea programada `bot-futuros listener` (el listener corrió
   desde una sesión de Claude) y los dos TODO de arriba.
 
+### El "close" por la web (FUTVAN7, 19/11/2026)
+
+Hasta acá el ejecutor web **no cerraba nada** (`_cerrar_cuenta` levantaba
+NotImplementedError "Etapa 3"): todo `close` respondía "ERROR - revisa la
+plataforma". Ahora:
+
+- **Bloque `cierre` por plataforma** (ver `pasos.py`). Sin él, el close es
+  ERROR y se cierra a mano: así quedan las plataformas no medidas.
+- **Flujo** (`EjecutorWeb._cerrar_cuenta`, en el hilo del navegador): elegir
+  la cuenta, leer el panel (sin posiciones -> "sin posiciones", sin clic;
+  sin panel -> ERROR, sin clic), dry_run frena ahí, en vivo corre los
+  pasos y **solo vale si el panel queda sin posiciones de esa cuenta**; si
+  no, ERROR con captura `cierre-sin-verificar`.
+- **`close all` = configuradas + operadas** (`operadas.py`,
+  `operadas.json`, gitignoreado): cada cuenta donde el bot hizo clic
+  (confirmada o no; en dry_run no) queda anotada; sale con un cierre
+  verificado o a los 5 días. Pedido del usuario: las cuentas que llegan por
+  número (`logins`) no están en `cuentas` y quedaban afuera.
+
+**TopstepX, medido con posición real** (long 1 M6E en TOP2, v2.4.40.2):
+
+- El panel Positions muestra **solo la cuenta elegida** (TOP1 vacío, TOP2
+  con la fila): no hace falta `texto_fila`.
+- Botón por fila en la columna Close:
+  `positions-click-button-close-<data-id de la fila>`. Un clic cerró a
+  mercado **sin confirmación** en <0,6 s y TopstepX **canceló solo** el SL
+  (stop) y el TP (limit): no quedó ninguna orden. Config: `"por_fila":
+  true` (los pasos corren dentro de cada fila abierta, de a una).
+- Descartados: `CLOSE POSITION` del DOM (solo el contrato del DOM) y
+  `FLATTEN ALL` (activo aun sin posición en la cuenta: podría ser de todas
+  las cuentas del login; no medido, **no usar**).
+- **Prueba de punta a punta por Telegram:** `M6E buy 1 4 4 TOP2` (09:33,
+  ritmo 11,1 s, SL/TP verificados) y `close TOP2` -> "Cierre verificado en
+  TOP2: ['1'] -> sin posiciones" en 1,7 s; `operadas.json` quedó vacío.
+- **Falta:** Tradovate (medirlo en una van de Tradovate: con varias cuentas
+  en un login el panel muestra todas, así que ahí va `texto_fila:
+  "{cuenta_plataforma}"`), y ver un `close all` con varias cuentas.
+
 ### Lo que se vio en las plataformas (capturas del usuario, 11/11/2026)
 
 (Lo de Tradovate de esta sección quedó superado por "PC FUTVAN5" de arriba.)
@@ -698,7 +736,8 @@ greenlet, playwright y pyee.
 1. ~~Paso `verificar`~~: hecho (11/11/2026), junto con `repetir`, `marcar`,
    `escribir` con `teclear`, los marcadores `{riesgo_usd}`, `{ganancia_usd}`,
    `{contratos_menos_1}` y `{cuenta_ultimos4}`, y el tope `max_riesgo_usd`.
-2. **Etapa 3**: cierres (cuenta por defecto, una cuenta o todas), multi-cuenta,
+2. **Etapa 3**: cierres (hechos en TopstepX el 19/11/2026, ver "El close
+   por la web"; falta Tradovate), multi-cuenta,
    latido con datos del navegador, `check_setup.py` completo (Playwright,
    Chromium, config, perfiles).
 3. **Etapa 4**: ~~orden real mínima~~ hecha en TopstepX (12/11/2026, ver
