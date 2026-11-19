@@ -496,6 +496,30 @@ Python313 es el mismo del bot de MT5: Playwright se instaló después de un
   solo verificaba la cuenta y no la cambiaba. **Después del update hay que
   probar en esta PC** que la orden de `MFF1` siga pasando: con una sola
   cuenta, el bot elige la que ya está (en FUTVAN4 eso no tuvo efectos).
+  Probado: orden real del bot en `MFF1` el 17/11 (12:17, `[] -> ['1']`) y
+  las del 19/11 de abajo.
+- **Órdenes por número y close (19/11/2026, en vivo):**
+  - `config.local.json` tiene
+    `"logins": {"mff": {"perfil": "perfiles/TRA1", "max_contratos": 1}}`:
+    el mismo perfil y tope que `MFF1`, porque es el mismo login. Respaldo
+    del archivo fuera del repo (tiene el token).
+  - Medido con `CONFIG`: `MFFUSFBLDR700298009` (y en minúsculas) resuelve
+    a `MFF1`; un `MFF…` sin configurar va al login de mff con `perfiles/TRA1`
+    y tope 1; `LFE…` y `FTDFY…` se rechazan ("esta van no tiene login de
+    …"). `MFF` coincide con el número real de la plataforma.
+  - Por Telegram, en vivo: `M6E buy 1 4 4 MFFUSFBLDR700298009` (11:00) y
+    `M6E buy 1 40 40 MFFUSFBLDR700298009` (11:05) fueron a `MFF1`,
+    confirmadas `[] -> ['1']` con el bracket verificado (4/4 y 40/40).
+  - **`close MFFUSFBLDR700298009` (11:05:48): "Cierre verificado en MFF1:
+    ['1'] -> sin posiciones"** en 1,8 s, sin captura de error, y
+    `operadas.json` quedó vacío. Es el close de Tradovate de FUTVAN4
+    (`0b0c02a`) en una van de **una** cuenta, sin columna ACCOUNT: el clic
+    derecho en `nth=1` (NET POS) abrió el menú igual.
+  - **Sin verificar en esta van:** que el LMT y el STP del bracket hayan
+    quedado "Canceled" después del close (el bot verifica Positions, no
+    Orders; en FUTVAN4 Tradovate los canceló solo). Tampoco se probó en vivo
+    un número `MFF…` que **no** esté en `cuentas`: esta van tiene una sola
+    cuenta de MFF.
 
 ### PC FUTVAN4: Lucid en Tradovate, varias cuentas en un login (16/11/2026)
 
@@ -750,8 +774,10 @@ solo leía):
 - **Sin medir:** dos posiciones abiertas a la vez en la misma cuenta (si el
   menú actúa sobre la fila del clic derecho; el bucle por fila igual
   verifica que se vaya una por vez y al final que no quede ninguna), y el
-  cierre en FUTVAN5/FUTVAN8, donde `nth=1` es la celda de NET POS: un
-  `close` con posición, la primera vez, lo prueba.
+  cierre en FUTVAN8, donde `nth=1` es la celda de NET POS: un `close` con
+  posición, la primera vez, lo prueba. **En FUTVAN5 (una cuenta, sin
+  ACCOUNT) quedó probado el 19/11/2026**: cierre verificado en 1,8 s (ver
+  "PC FUTVAN5").
 - **Si el menú no aparece**, el paso falla, el close es ERROR con captura y
   el menú puede quedar abierto: la orden siguiente falla sin operar (el
   fondo del menú tapa el ticket). Recargar o cerrar a mano.
