@@ -707,8 +707,41 @@ greenlet, playwright y pyee.
   TFY1` llenó el ticket y frenó antes de Send en 32 s. La compra, el
   prefijo ajeno y la línea sin prefijo **no llegaron** al listener (no
   quedó rastro en el log): sin probar en vivo en esta PC.
-- **Falta:** la tarea programada `bot-futuros listener` (el listener corrió
-  desde una sesión de Claude) y los dos TODO de arriba.
+- **Tarea programada instalada (17/11/2026):** `bot-futuros listener`,
+  igual que la `mt5-bot listener` de esta PC (al iniciar sesión con 1 min de
+  demora, sesión interactiva, `IgnoreNew`, sin límite, 3 reintentos), con
+  `run_listener.bat auto`. Se creó con `Register-ScheduledTask`.
+- **Órdenes por número y close (19/11/2026, en vivo):**
+  - `config.local.json` tiene
+    `"logins": {"tradeify": {"perfil": "perfiles/TRADEIFY", "max_contratos": 1}}`,
+    el mismo perfil y tope que `TFY1` (mismo login). Respaldo fuera del
+    repo, en `Documents\futuros-bot-respaldos` (tiene el token).
+  - **El prefijo es `FTDFY`, no `FTDY`**: releído en el desplegable ese día,
+    la única cuenta sigue siendo `FTDFYSLX50527729629`. Con `FTDY` el número
+    caería en Topstep (la firma sin prefijo) y se rechazaría.
+  - Medido con `CONFIG`: `FTDFYSLX50527729629` (y en minúsculas) resuelve
+    a `TFY1`; un `FTDFY…` sin configurar va al login de tradeify con
+    `perfiles/TRADEIFY` y tope 1; `MFF…`, `LFE…` y `668214-…` se rechazan
+    ("esta van no tiene login de …"); `TFY1,FTDFYSLX50527729629` es un solo
+    trabajo.
+  - Por Telegram, en vivo: `MNQ buy 1 40 40 FTDFYSLX50527729629` (11:13) y
+    `… 80 80 …` (11:26) fueron a `TFY1`, `[] -> ['1']` con el bracket
+    verificado. En la de 11:26 el paso de la flecha (`icon-back`) volvió del
+    resumen de la orden anterior.
+  - **`close FTDFYSLX50527729629` (11:27:01): "Cierre verificado en TFY1:
+    ['1'] -> sin posiciones"** en 2,4 s (selección de cuenta incluida), sin
+    captura de error, y `operadas.json` quedó vacío. Es el close de FUTVAN4
+    (`0b0c02a`) con Positions de Tradeify (4 columnas, `nth=1` = NET POS).
+  - Un close anterior (11:19:08, 3 s después de una compra confirmada)
+    respondió "sin posiciones" **sin clic**; el operador confirmó que no
+    quedaba posición abierta. Sin medir a qué hora cerró: la de 11:27 leyó
+    bien `['1']` 1,6 s después de la orden, así que no parece un panel que se
+    redibuja vacío al volver a elegir la cuenta.
+  - **Sin verificar:** que el LMT y el STP del bracket queden "Canceled"
+    después del close (el bot mira Positions, no Orders), y un número
+    `FTDFY…` que **no** esté en `cuentas` (esta van tiene una sola cuenta).
+- **Falta:** los dos TODO de arriba (diálogo de confirmación y la falsa
+  alarma con un bracket que se llena enseguida).
 
 ### El "close" por la web (FUTVAN7, 19/11/2026)
 
@@ -773,11 +806,10 @@ solo leía):
   símbolo de ese módulo; en esa PC el DOM está en NQZ6, no en MNQ).
 - **Sin medir:** dos posiciones abiertas a la vez en la misma cuenta (si el
   menú actúa sobre la fila del clic derecho; el bucle por fila igual
-  verifica que se vaya una por vez y al final que no quede ninguna), y el
-  cierre en FUTVAN8, donde `nth=1` es la celda de NET POS: un `close` con
-  posición, la primera vez, lo prueba. **En FUTVAN5 (una cuenta, sin
-  ACCOUNT) quedó probado el 19/11/2026**: cierre verificado en 1,8 s (ver
-  "PC FUTVAN5").
+  verifica que se vaya una por vez y al final que no quede ninguna). **En
+  FUTVAN5 y FUTVAN8 (una cuenta, sin ACCOUNT, `nth=1` = NET POS) quedó
+  probado el 19/11/2026**: cierre verificado en 1,8 s y 2,4 s (ver "PC
+  FUTVAN5" y "PC FUTVAN8").
 - **Si el menú no aparece**, el paso falla, el close es ERROR con captura y
   el menú puede quedar abierto: la orden siguiente falla sin operar (el
   fondo del menú tapa el ticket). Recargar o cerrar a mano.
